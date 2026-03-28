@@ -262,8 +262,11 @@ def change_own_password() -> str:
 def request_portal() -> str:
     if session.get('must_change_password') == 1:
         return redirect(url_for('change_own_password'))
-   db = get_db(); sectors = db.execute("SELECT name FROM sectors ORDER BY name").fetchall(); items = get_items(); requester_name_default = session.get('requester_full_name', ''); requester_sector_default = session.get('requester_sector', '')
-    if request.method == 'POST':
+db = get_db()
+sectors = db.execute('SELECT name FROM sectors ORDER BY name').fetchall()
+items = get_items()
+requester_name_default = session.get('requester_full_name', '')
+requester_sector_default = session.get('requester_sector', '')
         sector = request.form.get('sector', '').strip() or requester_sector_default
         item_name = request.form.get('item_name', '').strip(); item_code = request.form.get('item_code', '').strip(); quantity_str = request.form.get('quantity', '1').strip(); purpose = request.form.get('purpose', '').strip(); priority = request.form.get('priority', 'NORMAL').strip().upper()
         errors = []
