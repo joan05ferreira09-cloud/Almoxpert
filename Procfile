@@ -1,0 +1,1 @@
+web: gunicorn almoxpert_app:app
