@@ -11,11 +11,15 @@ from typing import Any
 
 from flask import Flask, Response, flash, g, redirect, render_template_string, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'almoxpert-chave-2026')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.config['DATABASE'] = os.path.join(BASE_DIR, 'almoxpert_empresarial.db')
+app.config['UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 
 def get_db() -> sqlite3.Connection:
@@ -92,10 +96,17 @@ def init_db() -> None:
                 admin_note TEXT,
                 approved_by TEXT,
                 approved_at TEXT,
+                request_mode TEXT NOT NULL DEFAULT 'CATALOGO',
+                image_path TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
         ''')
+        columns = [row[1] for row in cur.execute("PRAGMA table_info(requests)").fetchall()]
+        if 'request_mode' not in columns:
+            cur.execute("ALTER TABLE requests ADD COLUMN request_mode TEXT NOT NULL DEFAULT 'CATALOGO'")
+        if 'image_path' not in columns:
+            cur.execute("ALTER TABLE requests ADD COLUMN image_path TEXT")
         cur.execute("SELECT id FROM admins WHERE username='Joan'")
         if not cur.fetchone():
             cur.execute('INSERT INTO admins (username, password_hash, created_at) VALUES (?, ?, ?)', ('Joan', generate_password_hash('Maeve0306@'), now_str()))
@@ -273,32 +284,135 @@ def change_own_password() -> str:
 def request_portal() -> str:
     if session.get('must_change_password') == 1:
         return redirect(url_for('change_own_password'))
-    db = get_db(); sectors = get_sectors(); items = get_items(); requester_name_default = session.get('requester_full_name', ''); requester_sector_default = session.get('requester_sector', '')
+
+    db = get_db()
+    sectors = get_sectors()
+    items = get_items()
+    requester_name_default = session.get('requester_full_name', '')
+    requester_sector_default = session.get('requester_sector', '')
+
     if request.method == 'POST':
         sector = request.form.get('sector', '').strip() or requester_sector_default
-        item_name = request.form.get('item_name', '').strip(); item_code = request.form.get('item_code', '').strip(); quantity_str = request.form.get('quantity', '1').strip(); purpose = request.form.get('purpose', '').strip(); priority = request.form.get('priority', 'NORMAL').strip().upper()
+        item_name = request.form.get('item_name', '').strip()
+        item_code = request.form.get('item_code', '').strip()
+        quantity_str = request.form.get('quantity', '1').strip()
+        purpose = request.form.get('purpose', '').strip()
+        priority = request.form.get('priority', 'NORMAL').strip().upper()
         errors = []
-        if not sector: errors.append('Informe o setor.')
-        if not item_name: errors.append('Selecione um item do catálogo.')
-        if not purpose: errors.append('Informe a finalidade.')
+
+        if not sector:
+            errors.append('Informe o setor.')
+        if not item_name:
+            errors.append('Selecione um item do catálogo.')
+        if not purpose:
+            errors.append('Informe a finalidade.')
+
         try:
             quantity = int(quantity_str)
-            if quantity <= 0: errors.append('A quantidade deve ser maior que zero.')
+            if quantity <= 0:
+                errors.append('A quantidade deve ser maior que zero.')
         except ValueError:
-            quantity = 0; errors.append('Quantidade inválida.')
+            quantity = 0
+            errors.append('Quantidade inválida.')
+
         if errors:
-            for err in errors: flash(err, 'danger')
+            for err in errors:
+                flash(err, 'danger')
         else:
-            ts = now_str(); req = generate_request_number()
-            db.execute("INSERT INTO requests (request_number, requester_name, sector, item_name, item_code, quantity, purpose, priority, status, admin_note, approved_by, approved_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDENTE', '', '', '', ?, ?)", (req, requester_name_default, sector, item_name, item_code, quantity, purpose, priority, ts, ts))
-            db.commit(); flash(f'Solicitação enviada com sucesso. Número: {req}', 'success'); return redirect(url_for('request_portal'))
+            ts = now_str()
+            req = generate_request_number()
+            db.execute(
+                "INSERT INTO requests (request_number, requester_name, sector, item_name, item_code, quantity, purpose, priority, status, admin_note, approved_by, approved_at, request_mode, image_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDENTE', '', '', '', 'CATALOGO', '', ?, ?)",
+                (req, requester_name_default, sector, item_name, item_code, quantity, purpose, priority, ts, ts)
+            )
+            db.commit()
+            flash(f'Solicitação enviada com sucesso. Número: {req}', 'success')
+            return redirect(url_for('request_portal'))
+
     sector_options = ''.join([f'<option value="{row["name"]}">{row["name"]}</option>' for row in sectors])
     catalog_cards = []
     for row in items:
-        image_url = row['image_url'] or 'https://via.placeholder.com/500x300.png?text=Sem+Imagem'; keywords = row['keywords'] or ''
-        catalog_cards.append(f'''<div class="catalog-card" data-name="{row['item_name']}" data-code="{row['item_code'] or ''}" data-img="{image_url}" data-keywords="{keywords}"><img class="catalog-thumb" src="{image_url}" alt="{row['item_name']}"><div class="catalog-body"><div class="fw-bold">{row['item_name']}</div><div class="catalog-code">Código: {row['item_code'] or '-'}</div><div class="catalog-keywords mt-2">{keywords or 'Sem palavras-chave cadastradas'}</div></div></div>''')
-    content = f'''<div class="hero-bar"><div class="row align-items-center g-3"><div class="col-lg-8"><h2 class="hero-title">Nova solicitação</h2><p class="hero-subtitle">Escolha o item no catálogo e registre a necessidade do setor.</p></div><div class="col-lg-4 text-lg-end text-center">{logo_html()}</div></div></div><div class="card card-soft p-4"><div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2"><h3 class="section-title mb-0">Nova solicitação</h3><span class="small-muted">Solicitante: {requester_name_default}</span></div><form method="post" class="row g-3"><div class="col-md-6"><label class="form-label">Solicitante</label><input type="text" value="{requester_name_default}" class="form-control" readonly></div><div class="col-md-6"><label class="form-label">Setor</label><input list="sector-list" name="sector" class="form-control" value="{requester_sector_default}" required><datalist id="sector-list">{sector_options}</datalist></div><div class="col-12"><label class="form-label">Buscar item no catálogo</label><input type="text" id="catalogSearch" class="form-control" placeholder="Ex.: disco flap, luva, lâmpada..."></div><div class="col-12"><div id="selectedPreview" class="helper-box d-none"><div class="row align-items-center g-3"><div class="col-auto"><img id="selectedPreviewImg" src="" class="thumb-mini" alt="Prévia do item"></div><div class="col"><div class="fw-bold" id="selectedPreviewName"></div><div class="small-muted" id="selectedPreviewCode"></div></div></div></div></div><div class="col-12"><div class="catalog-grid" id="catalogGrid">{''.join(catalog_cards)}</div></div><div class="col-md-6"><label class="form-label">Item selecionado</label><input type="text" id="item_name" name="item_name" class="form-control" readonly required></div><div class="col-md-6"><label class="form-label">Código do item</label><input type="text" id="item_code" name="item_code" class="form-control" readonly></div><div class="col-md-4"><label class="form-label">Quantidade</label><input type="number" name="quantity" min="1" value="1" class="form-control" required></div><div class="col-md-4"><label class="form-label">Prioridade</label><select name="priority" class="form-select"><option>BAIXA</option><option selected>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></div><div class="col-md-12"><label class="form-label">Finalidade / Utilização</label><textarea name="purpose" class="form-control" rows="4" required></textarea></div><div class="col-12 d-grid"><button type="submit" class="btn btn-primary btn-lg">Enviar solicitação</button></div></form></div><script>const searchInput=document.getElementById('catalogSearch');const catalogCards=Array.from(document.querySelectorAll('.catalog-card'));const itemNameInput=document.getElementById('item_name');const itemCodeInput=document.getElementById('item_code');const selectedPreview=document.getElementById('selectedPreview');const selectedPreviewImg=document.getElementById('selectedPreviewImg');const selectedPreviewName=document.getElementById('selectedPreviewName');const selectedPreviewCode=document.getElementById('selectedPreviewCode');function selectCard(card){{catalogCards.forEach(c=>c.classList.remove('active'));card.classList.add('active');itemNameInput.value=card.dataset.name||'';itemCodeInput.value=card.dataset.code||'';selectedPreview.classList.remove('d-none');selectedPreviewImg.src=card.dataset.img||'';selectedPreviewName.textContent=card.dataset.name||'';selectedPreviewCode.textContent='Código: '+(card.dataset.code||'-');}}catalogCards.forEach(card=>{{card.addEventListener('click',()=>selectCard(card));}});searchInput?.addEventListener('input',function(){{const value=this.value.toLowerCase().trim();catalogCards.forEach(card=>{{const text=(card.dataset.name+' '+(card.dataset.code||'')+' '+(card.dataset.keywords||'')).toLowerCase();card.style.display=text.includes(value)?'':'none';}});}});</script>'''
+        image_url = row['image_url'] or 'https://via.placeholder.com/500x300.png?text=Sem+Imagem'
+        keywords = row['keywords'] or ''
+        catalog_cards.append(
+            f'''<div class="catalog-card" data-name="{row['item_name']}" data-code="{row['item_code'] or ''}" data-img="{image_url}" data-keywords="{keywords}"><img class="catalog-thumb" src="{image_url}" alt="{row['item_name']}"><div class="catalog-body"><div class="fw-bold">{row['item_name']}</div><div class="catalog-code">Código: {row['item_code'] or '-'}</div><div class="catalog-keywords mt-2">{keywords or 'Sem palavras-chave cadastradas'}</div></div></div>'''
+        )
+
+    content = f'''<div class="hero-bar"><div class="row align-items-center g-3"><div class="col-lg-8"><h2 class="hero-title">Nova solicitação</h2><p class="hero-subtitle">Escolha um item do catálogo ou use a nova solicitação com foto para itens ainda não cadastrados.</p></div><div class="col-lg-4 text-lg-end text-center">{logo_html()}</div></div></div><div class="card card-soft p-4"><div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2"><div><h3 class="section-title mb-0">Nova solicitação</h3><span class="small-muted">Solicitante: {requester_name_default}</span></div><a href="{url_for('request_portal_photo')}" class="btn btn-outline-primary">📸 Nova solicitação com foto</a></div><form method="post" class="row g-3"><div class="col-md-6"><label class="form-label">Solicitante</label><input type="text" value="{requester_name_default}" class="form-control" readonly></div><div class="col-md-6"><label class="form-label">Setor</label><input list="sector-list" name="sector" class="form-control" value="{requester_sector_default}" required><datalist id="sector-list">{sector_options}</datalist></div><div class="col-12"><label class="form-label">Buscar item no catálogo</label><input type="text" id="catalogSearch" class="form-control" placeholder="Ex.: disco flap, luva, lâmpada..."></div><div class="col-12"><div id="selectedPreview" class="helper-box d-none"><div class="row align-items-center g-3"><div class="col-auto"><img id="selectedPreviewImg" src="" class="thumb-mini" alt="Prévia do item"></div><div class="col"><div class="fw-bold" id="selectedPreviewName"></div><div class="small-muted" id="selectedPreviewCode"></div></div></div></div></div><div class="col-12"><div class="catalog-grid" id="catalogGrid">{''.join(catalog_cards)}</div></div><div class="col-md-6"><label class="form-label">Item selecionado</label><input type="text" id="item_name" name="item_name" class="form-control" readonly required></div><div class="col-md-6"><label class="form-label">Código do item</label><input type="text" id="item_code" name="item_code" class="form-control" readonly></div><div class="col-md-4"><label class="form-label">Quantidade</label><input type="number" name="quantity" min="1" value="1" class="form-control" required></div><div class="col-md-4"><label class="form-label">Prioridade</label><select name="priority" class="form-select"><option>BAIXA</option><option selected>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></div><div class="col-md-12"><label class="form-label">Finalidade / Utilização</label><textarea name="purpose" class="form-control" rows="4" required></textarea></div><div class="col-12 d-grid"><button type="submit" class="btn btn-primary btn-lg">Enviar solicitação</button></div></form></div><script>const searchInput=document.getElementById('catalogSearch');const catalogCards=Array.from(document.querySelectorAll('.catalog-card'));const itemNameInput=document.getElementById('item_name');const itemCodeInput=document.getElementById('item_code');const selectedPreview=document.getElementById('selectedPreview');const selectedPreviewImg=document.getElementById('selectedPreviewImg');const selectedPreviewName=document.getElementById('selectedPreviewName');const selectedPreviewCode=document.getElementById('selectedPreviewCode');function selectCard(card){{catalogCards.forEach(c=>c.classList.remove('active'));card.classList.add('active');itemNameInput.value=card.dataset.name||'';itemCodeInput.value=card.dataset.code||'';selectedPreview.classList.remove('d-none');selectedPreviewImg.src=card.dataset.img||'';selectedPreviewName.textContent=card.dataset.name||'';selectedPreviewCode.textContent='Código: '+(card.dataset.code||'-');}}catalogCards.forEach(card=>{{card.addEventListener('click',()=>selectCard(card));}});searchInput?.addEventListener('input',function(){{const value=this.value.toLowerCase().trim();catalogCards.forEach(card=>{{const text=(card.dataset.name+' '+(card.dataset.code||'')+' '+(card.dataset.keywords||'')).toLowerCase();card.style.display=text.includes(value)?'':'none';}});}});</script>'''
     return render_page('Solicitação', content)
+
+
+@app.route('/solicitacao-com-foto', methods=['GET', 'POST'])
+@requester_required
+def request_portal_photo() -> str:
+    if session.get('must_change_password') == 1:
+        return redirect(url_for('change_own_password'))
+
+    db = get_db()
+    sectors = get_sectors()
+    requester_name_default = session.get('requester_full_name', '')
+    requester_sector_default = session.get('requester_sector', '')
+
+    if request.method == 'POST':
+        sector = request.form.get('sector', '').strip() or requester_sector_default
+        item_name = request.form.get('item_name', '').strip()
+        quantity_str = request.form.get('quantity', '1').strip()
+        purpose = request.form.get('purpose', '').strip()
+        priority = request.form.get('priority', 'NORMAL').strip().upper()
+        photo = request.files.get('item_photo')
+        errors = []
+
+        if not sector:
+            errors.append('Informe o setor.')
+        if not item_name:
+            errors.append('Informe o nome do item.')
+        if not purpose:
+            errors.append('Informe a finalidade.')
+        if not photo or not photo.filename:
+            errors.append('Envie uma foto do item.')
+
+        try:
+            quantity = int(quantity_str)
+            if quantity <= 0:
+                errors.append('A quantidade deve ser maior que zero.')
+        except ValueError:
+            quantity = 0
+            errors.append('Quantidade inválida.')
+
+        image_path = ''
+        if photo and photo.filename:
+            filename = secure_filename(photo.filename)
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in {'.jpg', '.jpeg', '.png', '.webp'}:
+                errors.append('Envie uma imagem JPG, PNG ou WEBP.')
+            else:
+                filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{session.get('requester_user_id')}_{filename}"
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                photo.save(save_path)
+                image_path = f'uploads/{filename}'
+
+        if errors:
+            if image_path:
+                try:
+                    os.remove(os.path.join(app.static_folder, image_path))
+                except OSError:
+                    pass
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            ts = now_str()
+            req = generate_request_number()
+            db.execute(
+                "INSERT INTO requests (request_number, requester_name, sector, item_name, item_code, quantity, purpose, priority, status, admin_note, approved_by, approved_at, request_mode, image_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDENTE', '', '', '', 'FOTO', ?, ?, ?)",
+                (req, requester_name_default, sector, item_name, 'ITEM NOVO', quantity, purpose, priority, image_path, ts, ts)
+            )
+            db.commit()
+            flash(f'Solicitação com foto enviada com sucesso. Número: {req}', 'success')
+            return redirect(url_for('request_portal_photo'))
+
+    sector_options = ''.join([f'<option value="{row["name"]}">{row["name"]}</option>' for row in sectors])
+    content = f'''<div class="hero-bar"><div class="row align-items-center g-3"><div class="col-lg-8"><h2 class="hero-title">Nova solicitação com foto</h2><p class="hero-subtitle">Use esta opção quando o item ainda não estiver cadastrado ou quando a imagem ajudar o almoxarifado e compras a identificar o material.</p></div><div class="col-lg-4 text-lg-end text-center">{logo_html()}</div></div></div><div class="card card-soft p-4"><div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2"><div><h3 class="section-title mb-0">Solicitação com foto</h3><span class="small-muted">Solicitante: {requester_name_default}</span></div><a href="{url_for('request_portal')}" class="btn btn-outline-secondary">Voltar para catálogo</a></div><form method="post" enctype="multipart/form-data" class="row g-3"><div class="col-md-6"><label class="form-label">Solicitante</label><input type="text" value="{requester_name_default}" class="form-control" readonly></div><div class="col-md-6"><label class="form-label">Setor</label><input list="sector-list" name="sector" class="form-control" value="{requester_sector_default}" required><datalist id="sector-list">{sector_options}</datalist></div><div class="col-md-8"><label class="form-label">Nome do item</label><input type="text" name="item_name" class="form-control" placeholder="Ex.: caneta preta" required></div><div class="col-md-4"><label class="form-label">Quantidade</label><input type="number" name="quantity" min="1" value="1" class="form-control" required></div><div class="col-md-4"><label class="form-label">Prioridade</label><select name="priority" class="form-select"><option>BAIXA</option><option selected>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></div><div class="col-md-12"><label class="form-label">Finalidade / Utilização</label><textarea name="purpose" class="form-control" rows="4" placeholder="Explique onde será usado e qualquer detalhe importante." required></textarea></div><div class="col-md-12"><label class="form-label">Foto do item</label><input type="file" name="item_photo" accept="image/*" capture="environment" class="form-control" required><div class="small-muted mt-2">Você pode tirar a foto pelo celular ou enviar uma imagem já salva.</div></div><div class="col-12 d-grid"><button type="submit" class="btn btn-primary btn-lg">Enviar solicitação com foto</button></div></form></div>'''
+    return render_page('Solicitação com Foto', content)
 
 
 @app.route('/admin/dashboard')
@@ -310,7 +424,7 @@ def dashboard() -> str:
     pending = db.execute("SELECT COUNT(*) AS total FROM requests WHERE status='PENDENTE'").fetchone()['total']
     approved = db.execute("SELECT COUNT(*) AS total FROM requests WHERE status='APROVADA'").fetchone()['total']
     concluded = db.execute("SELECT COUNT(*) AS total FROM requests WHERE status='CONCLUIDA'").fetchone()['total']
-    body = ''.join([f"<tr><td><strong>{r['request_number']}</strong></td><td>{r['requester_name']}</td><td>{r['sector']}</td><td>{r['item_name']}</td><td>{r['quantity']}</td><td>{status_badge(r['status'])}</td><td><a class='btn btn-sm btn-outline-primary' href='{url_for('request_detail', request_id=r['id'])}'>Abrir</a></td></tr>" for r in rows]) or "<tr><td colspan='7' class='text-center py-4'>Nenhuma solicitação encontrada.</td></tr>"
+    body = ''.join([f"<tr><td><strong>{r['request_number']}</strong></td><td>{r['requester_name']}</td><td>{r['sector']}</td><td>{r['item_name']} {'<span class=\'status-badge status-neutro ms-2\'>Com foto</span>' if (r['request_mode'] or 'CATALOGO') == 'FOTO' else ''}</td><td>{r['quantity']}</td><td>{status_badge(r['status'])}</td><td><a class='btn btn-sm btn-outline-primary' href='{url_for('request_detail', request_id=r['id'])}'>Abrir</a></td></tr>" for r in rows]) or "<tr><td colspan='7' class='text-center py-4'>Nenhuma solicitação encontrada.</td></tr>"
     content = f'''<div class="hero-bar"><div class="row align-items-center g-3"><div class="col-lg-8"><h1 class="hero-title">Dashboard administrativo</h1><p class="hero-subtitle">Acompanhe solicitações, aprovações e indicadores do Almoxpert em um único painel.</p></div><div class="col-lg-4 text-lg-end text-center">{logo_html()}</div></div></div><div class="row g-3 mb-4"><div class="col-md-3"><div class="card stat-card p-4"><div class="label">Total de solicitações</div><div class="value">{total}</div></div></div><div class="col-md-3"><div class="card stat-card warning p-4"><div class="label">Pendentes</div><div class="value">{pending}</div></div></div><div class="col-md-3"><div class="card stat-card success p-4"><div class="label">Aprovadas</div><div class="value">{approved}</div></div></div><div class="col-md-3"><div class="card stat-card info p-4"><div class="label">Concluídas</div><div class="value">{concluded}</div></div></div></div><div class="card card-soft p-4"><div class="panel-header"><div><h3 class="section-title mb-1">Painel Administrativo</h3><div class="small-muted">Gerencie todas as solicitações com uma visualização clara e profissional.</div></div><div class="page-actions"><a href="{url_for('cadastros_page')}" class="btn btn-outline-primary">Cadastros</a><a href="{url_for('export_csv')}" class="btn btn-success">Exportar CSV</a></div></div><div class="table-wrap"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Nº Solicitação</th><th>Solicitante</th><th>Setor</th><th>Item</th><th>Qtd</th><th>Status</th><th>Ações</th></tr></thead><tbody>{body}</tbody></table></div></div></div>'''
     return render_page('Dashboard', content)
 
@@ -328,7 +442,9 @@ def request_detail(request_id: int) -> str:
         elif action == 'CONCLUIR': new_status = 'CONCLUIDA'
         if new_status:
             db.execute('UPDATE requests SET status=?, admin_note=?, approved_by=?, approved_at=?, updated_at=? WHERE id=?', (new_status, admin_note, approved_by, now_str(), now_str(), request_id)); db.commit(); flash(f'Solicitação atualizada para {new_status}.', 'success'); return redirect(url_for('request_detail', request_id=request_id))
-    content = f'''<div class="hero-bar"><div class="d-flex justify-content-between align-items-center gap-3 flex-wrap"><div><h2 class="hero-title">Solicitação {record['request_number']}</h2><p class="hero-subtitle">Criada em {record['created_at']} | Atualizada em {record['updated_at']}</p></div><a href="{url_for('dashboard')}" class="btn btn-outline-light">Voltar</a></div></div><div class="row g-4"><div class="col-lg-7"><div class="card card-soft p-4 h-100"><div class="row g-4 info-list"><div class="col-md-6"><strong>Solicitante</strong><div class="info-value">{record['requester_name']}</div></div><div class="col-md-6"><strong>Setor</strong><div class="info-value">{record['sector']}</div></div><div class="col-md-6"><strong>Item</strong><div class="info-value">{record['item_name']}</div></div><div class="col-md-6"><strong>Código</strong><div class="info-value">{record['item_code'] or '-'}</div></div><div class="col-md-4"><strong>Quantidade</strong><div class="info-value">{record['quantity']}</div></div><div class="col-md-4"><strong>Prioridade</strong><div>{priority_badge(record['priority'])}</div></div><div class="col-md-4"><strong>Status</strong><div>{status_badge(record['status'])}</div></div><div class="col-md-12"><strong>Finalidade</strong><div class="info-value">{record['purpose']}</div></div></div></div></div><div class="col-lg-5"><div class="card card-soft p-4"><h4 class="section-title mb-3">Ação do administrador</h4><form method="post"><div class="mb-3"><label class="form-label">Observação do admin</label><textarea name="admin_note" class="form-control" rows="6">{record['admin_note'] or ''}</textarea></div><div class="d-grid gap-2"><button name="action" value="APROVAR" class="btn btn-success">Aprovar</button><button name="action" value="RECUSAR" class="btn btn-danger">Recusar</button><button name="action" value="CONCLUIR" class="btn btn-primary">Concluir</button></div></form></div></div></div>'''
+    image_block = f'<div class="col-12"><strong>Imagem enviada</strong><div class="info-value mt-2"><img src="{url_for("static", filename=record["image_path"])}" alt="Imagem do item" style="max-width:100%; border-radius:18px; border:1px solid #d9e3ee;"></div></div>' if record['image_path'] else ''
+    mode_label = 'Solicitação com foto' if (record['request_mode'] or 'CATALOGO') == 'FOTO' else 'Solicitação de catálogo'
+    content = f'''<div class="hero-bar"><div class="d-flex justify-content-between align-items-center gap-3 flex-wrap"><div><h2 class="hero-title">Solicitação {record['request_number']}</h2><p class="hero-subtitle">Criada em {record['created_at']} | Atualizada em {record['updated_at']}</p></div><a href="{url_for('dashboard')}" class="btn btn-outline-light">Voltar</a></div></div><div class="row g-4"><div class="col-lg-7"><div class="card card-soft p-4 h-100"><div class="row g-4 info-list"><div class="col-md-6"><strong>Solicitante</strong><div class="info-value">{record['requester_name']}</div></div><div class="col-md-6"><strong>Setor</strong><div class="info-value">{record['sector']}</div></div><div class="col-md-6"><strong>Item</strong><div class="info-value">{record['item_name']}</div></div><div class="col-md-6"><strong>Tipo</strong><div class="info-value">{mode_label}</div></div><div class="col-md-6"><strong>Código</strong><div class="info-value">{record['item_code'] or '-'}</div></div><div class="col-md-3"><strong>Quantidade</strong><div class="info-value">{record['quantity']}</div></div><div class="col-md-3"><strong>Prioridade</strong><div>{priority_badge(record['priority'])}</div></div><div class="col-md-4"><strong>Status</strong><div>{status_badge(record['status'])}</div></div><div class="col-md-12"><strong>Finalidade</strong><div class="info-value">{record['purpose']}</div></div>{image_block}</div></div></div><div class="col-lg-5"><div class="card card-soft p-4"><h4 class="section-title mb-3">Ação do administrador</h4><form method="post"><div class="mb-3"><label class="form-label">Observação do admin</label><textarea name="admin_note" class="form-control" rows="6">{record['admin_note'] or ''}</textarea></div><div class="d-grid gap-2"><button name="action" value="APROVAR" class="btn btn-success">Aprovar</button><button name="action" value="RECUSAR" class="btn btn-danger">Recusar</button><button name="action" value="CONCLUIR" class="btn btn-primary">Concluir</button></div></form></div></div></div>'''
     return render_page('Detalhe', content)
 
 @app.route('/admin/requester/edit/<int:user_id>', methods=['GET', 'POST'])
@@ -407,7 +523,7 @@ def export_csv() -> Response:
     output = io.StringIO(); writer = csv.writer(output)
     writer.writerow(['Numero Solicitação', 'Solicitante', 'Setor', 'Item', 'Codigo do Item', 'Quantidade', 'Finalidade', 'Prioridade', 'Status', 'Observacao Admin', 'Tratado por', 'Data da ação', 'Criado em', 'Atualizado em'])
     for row in rows:
-        writer.writerow([row['request_number'], row['requester_name'], row['sector'], row['item_name'], row['item_code'], row['quantity'], row['purpose'], row['priority'], row['status'], row['admin_note'], row['approved_by'], row['approved_at'], row['created_at'], row['updated_at']])
+        writer.writerow([row['request_number'], row['requester_name'], row['sector'], row['item_name'], row['item_code'], row['quantity'], row['purpose'], row['priority'], row['request_mode'], row['image_path'], row['status'], row['admin_note'], row['approved_by'], row['approved_at'], row['created_at'], row['updated_at']])
     return Response(output.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=almoxpert_solicitacoes.csv'})
 
 
