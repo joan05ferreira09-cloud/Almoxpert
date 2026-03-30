@@ -1,2 +1,0 @@
-Build Command: pip install -r requirements.txt
-Start Command: python almoxpert_versao_final_nova.py
