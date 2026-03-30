@@ -102,43 +102,6 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             )
         ''')
-        cur.execute('''
-CREATE TABLE IF NOT EXISTS requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_number TEXT UNIQUE NOT NULL,
-    requester_name TEXT NOT NULL,
-    sector TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    item_code TEXT,
-    quantity INTEGER NOT NULL,
-    purpose TEXT NOT NULL,
-    priority TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDENTE',
-    admin_note TEXT,
-    approved_by TEXT,
-    approved_at TEXT,
-    request_mode TEXT NOT NULL DEFAULT 'CATALOGO',
-    image_path TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-''')
-
-cur.execute('''
-CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
-)
-''')
-
-cur.execute("SELECT 1 FROM admins WHERE username='Joan'")
-if not cur.fetchone():
-    cur.execute(
-        "INSERT INTO admins (username, password_hash, created_at) VALUES (?, ?, ?)",
-        ("Joan", generate_password_hash("Maeve0306@"), now_str())
-    )
         columns = [row[1] for row in cur.execute("PRAGMA table_info(requests)").fetchall()]
         if 'request_mode' not in columns:
             cur.execute("ALTER TABLE requests ADD COLUMN request_mode TEXT NOT NULL DEFAULT 'CATALOGO'")
