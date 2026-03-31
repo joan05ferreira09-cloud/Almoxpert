@@ -553,21 +553,21 @@ def admin_dashboard():
     )
 
 
-@app.route("/admin/solicitacoes")
-@admin_required
-def admin_requests():
-    status = request.args.get("status", "").strip().upper()
-    search = request.args.get("search", "").strip()
-
-    query = "SELECT * FROM requests WHERE 1=1"
-    params = []
-
-    if status in {"PENDENTE", "APROVADO", "RECUSADO"}:
-        query += " AND status = ?"
-        params.append(status)
-
-    if search:
-        like = f"%{search}%"
+    @app.route("/admin/solicitacoes")
+    @admin_required
+    def admin_requests():
+        status = request.args.get("status", "").strip().upper()
+        search = request.args.get("search", "").strip()
+    
+        query = "SELECT * FROM requests WHERE 1=1"
+        params = []
+    
+        if status in {"PENDENTE", "APROVADO", "RECUSADO"}:
+            query += " AND status = ?"
+            params.append(status)
+    
+        if search:
+            like = f"%{search}%"
         query += " AND (solicitante_nome LIKE ? OR item_nome LIKE ? OR COALESCE(item_codigo, '') LIKE ? OR COALESCE(onde_sera_usado, '') LIKE ?)"
         params.extend([like, like, like, like])
 
@@ -589,14 +589,103 @@ def update_request_status(request_id, new_status):
         return redirect(url_for("admin_requests"))
 
     conn = get_conn()
-    conn.execute(
-        "UPDATE requests SET status = ?, data_atualizacao = ? WHERE id = ?",
-        (new_status, now_br(), request_id),
-    )
-    conn.commit()
+
+    solicitacao = conn.execute(
+        "SELECT * FROM requests WHERE id = ?",
+        (request_id,),
+    ).fetchone()
+
+    if not solicitacao:
+        conn.close()
+        flash("Solicitação não encontrada.", "erro")
+        return redirect(url_for("admin_requests"))
+
+    status_atual = (solicitacao["status"] or "").upper()
+    product_id = solicitacao["product_id"]
+    quantidade = solicitacao["quantidade"] or 0
+    tipo = (solicitacao["tipo"] or "").upper()
+
+    produto = None
+    if product_id:
+        produto = conn.execute(
+            "SELECT * FROM products WHERE id = ? AND ativo = 1",
+            (product_id,),
+        ).fetchone()
+
+    try:
+        # 1) Se estava APROVADO e vai voltar para outro status, devolve ao estoque
+        if status_atual == "APROVADO" and new_status in {"PENDENTE", "RECUSADO"}:
+            if tipo == "CATALOGO" and produto and quantidade > 0:
+                novo_estoque = produto["estoque_atual"] + quantidade
+                conn.execute(
+                    """
+                    UPDATE products
+                    SET estoque_atual = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (novo_estoque, now_db(), product_id),
+                )
+
+        # 2) Se vai aprovar agora e ainda não estava aprovado, baixa do estoque
+        if status_atual != "APROVADO" and new_status == "APROVADO":
+            if tipo == "CATALOGO":
+                if not produto:
+                    conn.close()
+                    flash("Produto vinculado não encontrado para baixar o estoque.", "erro")
+                    return redirect(url_for("admin_requests"))
+
+                estoque_atual = produto["estoque_atual"] or 0
+
+                if quantidade <= 0:
+                    conn.close()
+                    flash("Quantidade inválida na solicitação.", "erro")
+                    return redirect(url_for("admin_requests"))
+
+                if estoque_atual < quantidade:
+                    conn.close()
+                    flash(
+                        f"Estoque insuficiente para aprovar. Disponível: {estoque_atual} | Solicitado: {quantidade}.",
+                        "erro",
+                    )
+                    return redirect(url_for("admin_requests"))
+
+                novo_estoque = estoque_atual - quantidade
+                conn.execute(
+                    """
+                    UPDATE products
+                    SET estoque_atual = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (novo_estoque, now_db(), product_id),
+                )
+
+        # 3) Atualiza o status da solicitação
+        conn.execute(
+            """
+            UPDATE requests
+            SET status = ?, data_atualizacao = ?
+            WHERE id = ?
+            """,
+            (new_status, now_br(), request_id),
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        conn.close()
+        flash("Erro ao atualizar a solicitação.", "erro")
+        return redirect(url_for("admin_requests"))
+
     conn.close()
 
-    flash(f"Solicitação atualizada para {new_status}.", "sucesso")
+    if status_atual != "APROVADO" and new_status == "APROVADO" and tipo == "CATALOGO":
+        flash("Solicitação aprovada e estoque baixado automaticamente.", "sucesso")
+    elif status_atual == "APROVADO" and new_status in {"PENDENTE", "RECUSADO"} and tipo == "CATALOGO":
+        flash("Status alterado e estoque devolvido automaticamente.", "sucesso")
+    else:
+        flash(f"Solicitação atualizada para {new_status}.", "sucesso")
+
     return redirect(url_for("admin_requests"))
 
 
