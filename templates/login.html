@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Almal Expert | Login{% endblock %}
+
+{% block content %}
+<section class="login-shell">
+    <div class="login-card">
+        <span class="eyebrow">Área administrativa</span>
+        <h2>Entrar no painel</h2>
+        <p class="muted">Use seu usuário e senha para acessar as funções de cadastro, aprovação e controle.</p>
+
+        <form method="POST" action="{{ url_for('login') }}" class="form-grid single-col">
+            <div>
+                <label>Usuário</label>
+                <input type="text" name="usuario" required>
+            </div>
+            <div>
+                <label>Senha</label>
+                <input type="password" name="senha" required>
+            </div>
+            <div>
+                <button type="submit" class="primary-btn">Entrar</button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almal Expert | {% if product %}Editar produto{% else %}Novo produto{% endif %}{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Cadastro de produtos</span>
+        <h2>{% if product %}Editar produto{% else %}Novo produto{% endif %}</h2>
+    </div>
+    <a class="outline-btn" href="{{ url_for('admin_products') }}">Voltar</a>
+</div>
+
+<section class="panel">
+    <form method="POST" enctype="multipart/form-data" class="form-grid">
+        <div>
+            <label>Nome *</label>
+            <input type="text" name="nome" value="{{ product.nome if product else '' }}" required>
+        </div>
+        <div>
+            <label>Código *</label>
+            <input type="text" name="codigo" value="{{ product.codigo if product else '' }}" required>
+        </div>
+        <div>
+            <label>Categoria</label>
+            <input type="text" name="categoria" value="{{ product.categoria if product else '' }}">
+        </div>
+        <div>
+            <label>Unidade</label>
+            <input type="text" name="unidade" value="{{ product.unidade if product else 'UN' }}">
+        </div>
+        <div>
+            <label>Estoque atual</label>
+            <input type="number" name="estoque_atual" value="{{ product.estoque_atual if product else 0 }}">
+        </div>
+        <div>
+            <label>Estoque mínimo</label>
+            <input type="number" name="estoque_minimo" value="{{ product.estoque_minimo if product else 0 }}">
+        </div>
+        <div class="full">
+            <label>Localização</label>
+            <input type="text" name="localizacao" value="{{ product.localizacao if product else '' }}">
+        </div>
+        <div class="full">
+            <label>Descrição</label>
+            <textarea name="descricao" rows="4">{{ product.descricao if product else '' }}</textarea>
+        </div>
+        <div class="full">
+            <label>Foto do produto</label>
+            <input type="file" name="imagem" accept="image/*" capture="environment">
+            {% if product and product.imagem %}
+                <div class="current-image-box">
+                    <img src="{{ url_for('uploaded_file', folder='products', filename=product.imagem) }}" alt="Imagem atual">
+                </div>
+            {% endif %}
+        </div>
+        <div class="full">
+            <button type="submit" class="primary-btn">{% if product %}Salvar alterações{% else %}Cadastrar produto{% endif %}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

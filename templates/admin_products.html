@@ -1,0 +1,61 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almal Expert | Produtos{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Cadastro de produtos</span>
+        <h2>Itens do catálogo</h2>
+    </div>
+    <a class="primary-btn link-btn" href="{{ url_for('admin_product_new') }}">Novo produto</a>
+</div>
+
+<section class="panel">
+    <form method="GET" action="{{ url_for('admin_products') }}" class="toolbar-grid">
+        <div>
+            <label>Buscar</label>
+            <input type="text" name="search" value="{{ current_search }}" placeholder="Nome, código, categoria, local...">
+        </div>
+        <div>
+            <label>Filtro</label>
+            <select name="low_stock">
+                <option value="" {% if not low_stock %}selected{% endif %}>Todos</option>
+                <option value="1" {% if low_stock == '1' %}selected{% endif %}>Somente baixo estoque</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <button class="primary-btn" type="submit">Filtrar</button>
+            <a class="outline-btn" href="{{ url_for('admin_products') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="products-grid-admin">
+        {% for p in products %}
+        <article class="product-admin-card {% if p.estoque_atual <= p.estoque_minimo %}low-stock{% endif %}">
+            <div class="product-admin-thumb">
+                {% if p.imagem %}
+                    <img src="{{ url_for('uploaded_file', folder='products', filename=p.imagem) }}" alt="{{ p.nome }}">
+                {% else %}
+                    <img src="{{ url_for('static', filename='img/placeholder-product.svg') }}" alt="Sem imagem">
+                {% endif %}
+            </div>
+            <div class="product-admin-body">
+                <h3>{{ p.nome }}</h3>
+                <p><strong>Código:</strong> {{ p.codigo }}</p>
+                <p><strong>Categoria:</strong> {{ p.categoria or '-' }}</p>
+                <p><strong>Estoque:</strong> {{ p.estoque_atual }} | <strong>Mínimo:</strong> {{ p.estoque_minimo }}</p>
+                <p><strong>Unidade:</strong> {{ p.unidade or '-' }}</p>
+                <p><strong>Local:</strong> {{ p.localizacao or '-' }}</p>
+                {% if p.descricao %}<p class="muted">{{ p.descricao }}</p>{% endif %}
+            </div>
+            <div class="card-actions">
+                <a class="action-chip" href="{{ url_for('admin_product_edit', product_id=p.id) }}">Editar</a>
+                <a class="action-chip danger" href="{{ url_for('admin_product_delete', product_id=p.id) }}" onclick="return confirm('Deseja excluir este produto?');">Excluir</a>
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state full-empty">Nenhum produto cadastrado.</div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

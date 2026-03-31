@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="admin-shell">
+    <aside class="admin-sidebar">
+        <div class="admin-profile">
+            <span class="eyebrow">Administrador</span>
+            <h3>{{ session.get('admin_nome', 'Joan') }}</h3>
+            <p>Gestão completa do Almal Expert</p>
+        </div>
+
+        <nav class="admin-menu">
+            <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint == 'admin_dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('admin_requests') }}" class="{% if request.endpoint == 'admin_requests' or request.endpoint == 'update_request_status' %}active{% endif %}">Solicitações</a>
+            <a href="{{ url_for('admin_products') }}" class="{% if 'product' in request.endpoint or request.endpoint == 'admin_products' %}active{% endif %}">Cadastro de produtos</a>
+            <a href="{{ url_for('admin_users') }}" class="{% if 'admin_user' in request.endpoint or request.endpoint == 'admin_users' %}active{% endif %}">Cadastro de usuários</a>
+        </nav>
+    </aside>
+
+    <div class="admin-main">
+        {% block admin_content %}{% endblock %}
+    </div>
+</section>
+{% endblock %}
