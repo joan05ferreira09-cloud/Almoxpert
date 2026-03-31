@@ -508,3 +508,38 @@ th {
         grid-template-columns: 1fr;
     }
 }
+.dashboard-container {
+    display: flex;
+    gap: 30px;
+    padding: 20px;
+}
+
+.dashboard-left {
+    width: 250px;
+}
+
+.dashboard-buttons a {
+    display: block;
+    margin: 10px 0;
+    padding: 12px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.dashboard-right {
+    flex: 1;
+}
+
+.kpi-box {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.kpi-box div {
+    background: #e0f2fe;
+    padding: 15px;
+    border-radius: 10px;
+}
