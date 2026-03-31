@@ -1,18 +1,17 @@
 {% extends "admin_base.html" %}
 
 {% block content %}
-<div class="adm-page-header">
+<div class="page-header">
     <div>
         <h1>Produtos</h1>
-        <p>Cadastre, consulte e acompanhe o estoque dos itens do almoxarifado.</p>
+        <p>Cadastre, visualize, edite e acompanhe o estoque dos itens.</p>
     </div>
-
-    <a href="{{ url_for('admin_product_new') }}" class="adm-btn adm-btn-primary">+ Novo produto</a>
+    <a href="{{ url_for('admin_product_new') }}" class="btn btn-primary">+ Novo produto</a>
 </div>
 
-<div class="adm-filters-card">
-    <form method="GET" action="{{ url_for('admin_products') }}" class="adm-filters-form">
-        <div class="adm-filter-group">
+<div class="filters-card">
+    <form method="GET" action="{{ url_for('admin_products') }}" class="filters-form">
+        <div class="filter-group">
             <label for="search">Buscar</label>
             <input
                 type="text"
@@ -23,7 +22,7 @@
             >
         </div>
 
-        <div class="adm-filter-check">
+        <div class="filter-group checkbox-group">
             <label>
                 <input
                     type="checkbox"
@@ -35,65 +34,68 @@
             </label>
         </div>
 
-        <div class="adm-filter-actions">
-            <button type="submit" class="adm-btn adm-btn-primary">Filtrar</button>
-            <a href="{{ url_for('admin_products') }}" class="adm-btn adm-btn-secondary">Limpar</a>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{{ url_for('admin_products') }}" class="btn btn-secondary">Limpar</a>
         </div>
     </form>
 </div>
 
 {% if products %}
-<div class="prod-grid">
+<div class="products-list">
     {% for p in products %}
-    <div class="prod-card">
-        <div class="prod-image-box">
+    <div class="product-list-card">
+        <div class="product-thumb">
             <img
                 src="{{ url_for('uploaded_file', folder='products', filename=p['imagem']) if p['imagem'] else url_for('static', filename='img/placeholder-product.svg') }}"
                 alt="{{ p['nome'] }}"
-                class="prod-image"
                 onclick="expandImage(this)"
             >
         </div>
 
-        <div class="prod-info">
-            <div class="prod-header">
+        <div class="product-list-info">
+            <div class="product-title-row">
                 <h3>{{ p['nome'] }}</h3>
 
                 {% if p['estoque_atual'] <= p['estoque_minimo'] %}
-                    <span class="prod-badge prod-badge-low">Estoque baixo</span>
+                    <span class="stock-badge low">Estoque baixo</span>
                 {% else %}
-                    <span class="prod-badge prod-badge-ok">Em estoque</span>
+                    <span class="stock-badge ok">Em estoque</span>
                 {% endif %}
             </div>
 
-            <div class="prod-details">
+            <div class="product-meta-grid">
                 <p><strong>Código:</strong> {{ p['codigo'] }}</p>
                 <p><strong>Categoria:</strong> {{ p['categoria'] or 'Não informada' }}</p>
-                <p><strong>Estoque:</strong> {{ p['estoque_atual'] }} | <strong>Mínimo:</strong> {{ p['estoque_minimo'] }}</p>
+                <p><strong>Estoque:</strong> {{ p['estoque_atual'] }}</p>
+                <p><strong>Mínimo:</strong> {{ p['estoque_minimo'] }}</p>
                 <p><strong>Unidade:</strong> {{ p['unidade'] or 'UN' }}</p>
                 <p><strong>Local:</strong> {{ p['localizacao'] or 'Não informado' }}</p>
-                {% if p['descricao'] %}
-                <p><strong>Descrição:</strong> {{ p['descricao'] }}</p>
-                {% endif %}
             </div>
 
-            <div class="prod-actions">
-                <a href="{{ url_for('admin_product_edit', product_id=p['id']) }}" class="adm-btn adm-btn-secondary adm-btn-small">Editar</a>
-                <a href="{{ url_for('admin_product_delete', product_id=p['id']) }}" class="adm-btn adm-btn-danger adm-btn-small" onclick="return confirm('Deseja realmente excluir este produto?')">Excluir</a>
+            {% if p['descricao'] %}
+            <div class="product-description">
+                <strong>Descrição:</strong> {{ p['descricao'] }}
+            </div>
+            {% endif %}
+
+            <div class="product-actions">
+                <a href="{{ url_for('admin_product_edit', product_id=p['id']) }}" class="btn btn-small btn-secondary">Editar</a>
+                <a href="{{ url_for('admin_product_delete', product_id=p['id']) }}" class="btn btn-small btn-danger" onclick="return confirm('Deseja realmente excluir este produto?')">Excluir</a>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
 {% else %}
-<div class="adm-empty-state">
+<div class="empty-state">
     <h3>Nenhum produto encontrado</h3>
-    <p>Cadastre um novo item ou ajuste os filtros.</p>
+    <p>Cadastre um novo item ou ajuste os filtros de busca.</p>
 </div>
 {% endif %}
 
-<div id="imageModal" class="prod-modal" onclick="closeExpandedImage()">
-    <span class="prod-modal-close">&times;</span>
-    <img id="expandedImage" class="prod-modal-image" alt="Imagem expandida">
+<div id="imageModal" class="image-modal" onclick="closeExpandedImage()">
+    <span class="image-modal-close">&times;</span>
+    <img id="expandedImage" class="image-modal-content" alt="Imagem expandida">
 </div>
 {% endblock %}
