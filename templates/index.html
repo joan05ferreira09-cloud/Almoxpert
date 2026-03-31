@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Almoxpert | Solicitação{% endblock %}
+
+{% block content %}
+<section class="request-shell">
+    <div class="request-header">
+        <div>
+            <span class="eyebrow">Solicitação rápida</span>
+            <h2>Solicitação inteligente</h2>
+            <p class="muted">Escolha entre solicitar por catálogo ou pedir um item novo com imagem.</p>
+        </div>
+        <div class="request-user-badge">
+            <strong>{{ session.get('requester_nome', '') }}</strong>
+            <span>{{ session.get('requester_setor', '') }}</span>
+        </div>
+    </div>
+
+    <div class="request-mode-switch">
+        <button type="button" class="tab-button active" data-tab-target="catalogTab">Solicitação por catálogo</button>
+        <button type="button" class="tab-button" data-tab-target="newItemTab">Item novo por imagem</button>
+    </div>
+
+    <section id="catalogTab" class="tab-content active">
+        <div class="catalog-layout simplified">
+            <div class="form-card">
+                <form method="POST" action="{{ url_for('solicitar_catalogo') }}" class="form-grid compact-form">
+                    <div class="full">
+                        <label>Buscar item no catálogo</label>
+                        <input type="text" id="catalogSearchInput" placeholder="Ex.: disco flap, luva, parafuso, óleo..." autocomplete="off">
+                        <input type="hidden" id="selectedProductId" name="product_id">
+                        <input type="hidden" id="selectedProductName" name="item_nome" required>
+                        <input type="hidden" id="selectedProductCode" name="item_codigo">
+                    </div>
+
+                    <div class="full selected-product-box" id="selectedProductBox">
+                        <div class="selected-product-placeholder">
+                            Nenhum item selecionado ainda.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Quantidade</label>
+                        <input type="number" min="1" name="quantidade" required>
+                    </div>
+                    <div>
+                        <label>Prioridade</label>
+                        <select name="prioridade" required>
+                            <option value="Normal">Normal</option>
+                            <option value="Urgente">Urgente</option>
+                            <option value="Programada">Programada</option>
+                        </select>
+                    </div>
+                    <div class="full">
+                        <label>Onde será usado</label>
+                        <textarea name="onde_sera_usado" rows="3" required placeholder="Ex.: manutenção da linha 2, setor de embalagem, produção..."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Observação</label>
+                        <textarea name="observacao" rows="3" placeholder="Detalhes adicionais, urgência, finalidade, observações."></textarea>
+                    </div>
+                    <div class="full">
+                        <button class="primary-btn" type="submit">Enviar solicitação</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="catalog-results-card">
+                <div class="catalog-results-header">
+                    <h3>Catálogo visual inteligente</h3>
+                    <p class="muted">As fotos aparecem conforme você digita.</p>
+                </div>
+                <div id="catalogResults" class="catalog-results-grid empty-state-grid">
+                    <div class="empty-state">
+                        Digite pelo menos 2 letras para exibir os itens do catálogo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="newItemTab" class="tab-content">
+        <div class="single-form-layout">
+            <div class="form-card">
+                <div class="catalog-results-header">
+                    <h3>Solicitação de item novo</h3>
+                    <p class="muted">Use esta opção para pedir um material que ainda não está cadastrado no catálogo.</p>
+                </div>
+                <form method="POST" action="{{ url_for('solicitar_item_novo') }}" enctype="multipart/form-data" class="form-grid compact-form">
+                    <div class="full">
+                        <label>Nome do item</label>
+                        <input type="text" name="item_nome_novo" placeholder="Ex.: caneta preta" required>
+                    </div>
+                    <div>
+                        <label>Quantidade</label>
+                        <input type="number" min="1" name="quantidade_novo" required>
+                    </div>
+                    <div>
+                        <label>Prioridade</label>
+                        <select name="prioridade_novo" required>
+                            <option value="Normal">Normal</option>
+                            <option value="Urgente">Urgente</option>
+                            <option value="Programada">Programada</option>
+                        </select>
+                    </div>
+                    <div class="full">
+                        <label>Onde será usado</label>
+                        <textarea name="onde_sera_usado_novo" rows="3" required placeholder="Ex.: escritório administrativo, manutenção, produção..."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Observação</label>
+                        <textarea name="observacao_novo" rows="3" placeholder="Descreva a finalidade, marca desejada, medida, cor ou outro detalhe."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Foto do item</label>
+                        <input type="file" name="foto_item_novo" accept="image/*" capture="environment">
+                        <small class="field-hint">Você pode tirar uma foto na hora ou escolher da galeria.</small>
+                    </div>
+                    <div class="full">
+                        <button class="primary-btn" type="submit">Enviar item novo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+</section>
+{% endblock %}

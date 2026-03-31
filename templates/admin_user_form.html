@@ -1,0 +1,53 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almoxpert | {% if user %}Editar solicitante{% else %}Novo solicitante{% endif %}{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Cadastro de usuários</span>
+        <h2>{% if user %}Editar solicitante{% else %}Novo solicitante{% endif %}</h2>
+    </div>
+    <a class="outline-btn" href="{{ url_for('admin_users') }}">Voltar</a>
+</div>
+
+<section class="panel">
+    <form method="POST" class="form-grid compact-form">
+        <div>
+            <label>Nome *</label>
+            <input type="text" name="nome" value="{{ user.nome if user else '' }}" required>
+        </div>
+        <div>
+            <label>Setor</label>
+            <input type="text" name="setor" value="{{ user.setor if user else '' }}">
+        </div>
+        <div>
+            <label>Matrícula</label>
+            <input type="text" name="matricula" value="{{ user.matricula if user else '' }}">
+        </div>
+        <div>
+            <label>Telefone / Ramal</label>
+            <input type="text" name="telefone" value="{{ user.telefone if user else '' }}">
+        </div>
+        <div>
+            <label>Login *</label>
+            <input type="text" name="usuario" value="{{ user.usuario if user else '' }}" required>
+        </div>
+        <div>
+            <label>{% if user %}Nova senha temporária{% else %}Senha temporária *{% endif %}</label>
+            <input type="text" name="senha" {% if not user %}required{% endif %} placeholder="{% if user %}Preencha apenas se quiser resetar{% else %}Ex.: setor@123{% endif %}">
+        </div>
+        {% if user %}
+        <div>
+            <label>Obrigar troca de senha</label>
+            <select name="force_password_change">
+                <option value="1" {% if user.force_password_change %}selected{% endif %}>Sim</option>
+                <option value="0" {% if not user.force_password_change %}selected{% endif %}>Não</option>
+            </select>
+        </div>
+        {% endif %}
+        <div class="full">
+            <button type="submit" class="primary-btn">{% if user %}Salvar alterações{% else %}Cadastrar solicitante{% endif %}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
