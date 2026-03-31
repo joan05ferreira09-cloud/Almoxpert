@@ -13,6 +13,7 @@ from flask import (
     request,
     session,
     url_for,
+    send_from_directory,
 )
 from werkzeug.utils import secure_filename
 
@@ -180,10 +181,12 @@ def init_db():
     users_without_login = cur.execute(
         "SELECT id, nome, matricula FROM requester_users WHERE COALESCE(usuario, '') = ''"
     ).fetchall()
+
     for user in users_without_login:
         base_username = create_default_username(user["nome"], user["matricula"], user["id"])
         username = base_username
         suffix = 1
+
         while cur.execute(
             "SELECT id FROM requester_users WHERE usuario = ? AND id != ?",
             (username, user["id"]),
@@ -192,7 +195,11 @@ def init_db():
             username = f"{base_username[:14]}{suffix}"
 
         cur.execute(
-            "UPDATE requester_users SET usuario = ?, senha = COALESCE(NULLIF(senha, ''), ?), force_password_change = 1, updated_at = ? WHERE id = ?",
+            """
+            UPDATE requester_users
+            SET usuario = ?, senha = COALESCE(NULLIF(senha, ''), ?), force_password_change = 1, updated_at = ?
+            WHERE id = ?
+            """,
             (username, f"{username}@123", now, user["id"]),
         )
 
@@ -200,7 +207,6 @@ def init_db():
     conn.close()
 
 
-# ---------- AUTH ----------
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped(*args, **kwargs):
@@ -210,7 +216,6 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
 
     return wrapped
-
 
 
 def requester_required(view_func):
@@ -227,7 +232,6 @@ def requester_required(view_func):
     return wrapped
 
 
-# ---------- MAIN ----------
 @app.route("/")
 def home():
     if session.get("admin_logged_in"):
@@ -246,10 +250,12 @@ def login():
         senha = request.form.get("senha", "").strip()
 
         conn = get_conn()
+
         admin = conn.execute(
             "SELECT * FROM admin_users WHERE usuario = ? AND senha = ? AND ativo = 1",
             (usuario, senha),
         ).fetchone()
+
         if admin:
             conn.close()
             session.clear()
@@ -274,9 +280,11 @@ def login():
             session["requester_matricula"] = requester["matricula"] or ""
             session["requester_telefone"] = requester["telefone"] or ""
             session["force_password_change"] = bool(requester["force_password_change"])
+
             if requester["force_password_change"]:
                 flash("Primeiro acesso detectado. Defina sua nova senha.", "sucesso")
                 return redirect(url_for("change_requester_password"))
+
             flash("Login realizado com sucesso.", "sucesso")
             return redirect(url_for("requester_home"))
 
@@ -296,6 +304,7 @@ def change_requester_password():
         if len(nova_senha) < 6:
             flash("A nova senha precisa ter pelo menos 6 caracteres.", "erro")
             return redirect(url_for("change_requester_password"))
+
         if nova_senha != confirmar_senha:
             flash("As senhas não conferem.", "erro")
             return redirect(url_for("change_requester_password"))
@@ -322,7 +331,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------- REQUESTER AREA ----------
 @app.route("/solicitante")
 @requester_required
 def requester_home():
@@ -366,7 +374,11 @@ def catalog_search():
                 "estoque_minimo": p["estoque_minimo"],
                 "localizacao": p["localizacao"] or "Não informada",
                 "descricao": p["descricao"] or "",
-                "imagem_url": url_for("uploaded_file", folder="products", filename=p["imagem"]) if p["imagem"] else url_for("static", filename="img/placeholder-product.svg"),
+                "imagem_url": (
+                    url_for("uploaded_file", folder="products", filename=p["imagem"])
+                    if p["imagem"]
+                    else url_for("static", filename="img/placeholder-product.svg")
+                ),
             }
         )
     return jsonify(result)
@@ -502,7 +514,6 @@ def solicitar_item_novo():
     return redirect(url_for("requester_home"))
 
 
-# ---------- ADMIN ----------
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
@@ -514,12 +525,14 @@ def admin_dashboard():
     total_rejected = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'RECUSADO'").fetchone()["total"]
     total_products = conn.execute("SELECT COUNT(*) AS total FROM products WHERE ativo = 1").fetchone()["total"]
     total_users = conn.execute("SELECT COUNT(*) AS total FROM requester_users WHERE ativo = 1").fetchone()["total"]
-    low_stock = conn.execute("SELECT COUNT(*) AS total FROM products WHERE ativo = 1 AND estoque_atual <= estoque_minimo").fetchone()["total"]
-    urgent_open = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'PENDENTE' AND prioridade = 'Urgente'").fetchone()["total"]
+    low_stock = conn.execute(
+        "SELECT COUNT(*) AS total FROM products WHERE ativo = 1 AND estoque_atual <= estoque_minimo"
+    ).fetchone()["total"]
+    urgent_open = conn.execute(
+        "SELECT COUNT(*) AS total FROM requests WHERE status = 'PENDENTE' AND prioridade = 'Urgente'"
+    ).fetchone()["total"]
 
-    latest_requests = conn.execute(
-        "SELECT * FROM requests ORDER BY id DESC LIMIT 8"
-    ).fetchall()
+    latest_requests = conn.execute("SELECT * FROM requests ORDER BY id DESC LIMIT 8").fetchall()
 
     sector_kpis = conn.execute(
         """
@@ -553,21 +566,21 @@ def admin_dashboard():
     )
 
 
-    @app.route("/admin/solicitacoes")
-    @admin_required
-    def admin_requests():
-        status = request.args.get("status", "").strip().upper()
-        search = request.args.get("search", "").strip()
-    
-        query = "SELECT * FROM requests WHERE 1=1"
-        params = []
-    
-        if status in {"PENDENTE", "APROVADO", "RECUSADO"}:
-            query += " AND status = ?"
-            params.append(status)
-    
-        if search:
-            like = f"%{search}%"
+@app.route("/admin/solicitacoes")
+@admin_required
+def admin_requests():
+    status = request.args.get("status", "").strip().upper()
+    search = request.args.get("search", "").strip()
+
+    query = "SELECT * FROM requests WHERE 1=1"
+    params = []
+
+    if status in {"PENDENTE", "APROVADO", "RECUSADO"}:
+        query += " AND status = ?"
+        params.append(status)
+
+    if search:
+        like = f"%{search}%"
         query += " AND (solicitante_nome LIKE ? OR item_nome LIKE ? OR COALESCE(item_codigo, '') LIKE ? OR COALESCE(onde_sera_usado, '') LIKE ?)"
         params.extend([like, like, like, like])
 
@@ -577,13 +590,19 @@ def admin_dashboard():
     requests_data = conn.execute(query, params).fetchall()
     conn.close()
 
-    return render_template("admin_requests.html", requests_data=requests_data, current_status=status, current_search=search)
+    return render_template(
+        "admin_requests.html",
+        requests_data=requests_data,
+        current_status=status,
+        current_search=search,
+    )
 
 
 @app.route("/admin/solicitacoes/<int:request_id>/status/<string:new_status>")
 @admin_required
 def update_request_status(request_id, new_status):
     new_status = new_status.upper()
+
     if new_status not in {"PENDENTE", "APROVADO", "RECUSADO"}:
         flash("Status inválido.", "erro")
         return redirect(url_for("admin_requests"))
@@ -601,9 +620,13 @@ def update_request_status(request_id, new_status):
         return redirect(url_for("admin_requests"))
 
     status_atual = (solicitacao["status"] or "").upper()
-    product_id = solicitacao["product_id"]
-    quantidade = solicitacao["quantidade"] or 0
     tipo = (solicitacao["tipo"] or "").upper()
+    product_id = solicitacao["product_id"]
+
+    try:
+        quantidade = int(solicitacao["quantidade"] or 0)
+    except (TypeError, ValueError):
+        quantidade = 0
 
     produto = None
     if product_id:
@@ -613,10 +636,9 @@ def update_request_status(request_id, new_status):
         ).fetchone()
 
     try:
-        # 1) Se estava APROVADO e vai voltar para outro status, devolve ao estoque
         if status_atual == "APROVADO" and new_status in {"PENDENTE", "RECUSADO"}:
             if tipo == "CATALOGO" and produto and quantidade > 0:
-                novo_estoque = produto["estoque_atual"] + quantidade
+                novo_estoque = int(produto["estoque_atual"] or 0) + quantidade
                 conn.execute(
                     """
                     UPDATE products
@@ -626,7 +648,6 @@ def update_request_status(request_id, new_status):
                     (novo_estoque, now_db(), product_id),
                 )
 
-        # 2) Se vai aprovar agora e ainda não estava aprovado, baixa do estoque
         if status_atual != "APROVADO" and new_status == "APROVADO":
             if tipo == "CATALOGO":
                 if not produto:
@@ -634,7 +655,7 @@ def update_request_status(request_id, new_status):
                     flash("Produto vinculado não encontrado para baixar o estoque.", "erro")
                     return redirect(url_for("admin_requests"))
 
-                estoque_atual = produto["estoque_atual"] or 0
+                estoque_atual = int(produto["estoque_atual"] or 0)
 
                 if quantidade <= 0:
                     conn.close()
@@ -659,7 +680,6 @@ def update_request_status(request_id, new_status):
                     (novo_estoque, now_db(), product_id),
                 )
 
-        # 3) Atualiza o status da solicitação
         conn.execute(
             """
             UPDATE requests
@@ -712,7 +732,12 @@ def admin_products():
     products = conn.execute(query, params).fetchall()
     conn.close()
 
-    return render_template("admin_products.html", products=products, current_search=search, low_stock=only_low)
+    return render_template(
+        "admin_products.html",
+        products=products,
+        current_search=search,
+        low_stock=only_low,
+    )
 
 
 @app.route("/admin/produtos/novo", methods=["GET", "POST"])
@@ -894,6 +919,7 @@ def admin_users():
         like = f"%{search}%"
         query += " AND (nome LIKE ? OR COALESCE(setor, '') LIKE ? OR COALESCE(matricula, '') LIKE ? OR COALESCE(usuario, '') LIKE ?)"
         params.extend([like, like, like, like])
+
     query += " ORDER BY nome COLLATE NOCASE ASC"
 
     conn = get_conn()
@@ -976,6 +1002,7 @@ def admin_user_edit(user_id):
             return redirect(url_for("admin_user_edit", user_id=user_id))
 
         final_password = senha if senha else user["senha"]
+
         conn.execute(
             """
             UPDATE requester_users
@@ -1011,8 +1038,6 @@ def admin_user_delete(user_id):
 
 @app.route("/uploads/<folder>/<filename>")
 def uploaded_file(folder, filename):
-    from flask import send_from_directory
-
     if folder == "products":
         return send_from_directory(app.config["PRODUCT_UPLOAD_DIR"], filename)
     if folder == "requests":
