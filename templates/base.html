@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Almoxpert{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <div class="container topbar-inner">
+            <div class="brand-group">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Almoxpert" class="brand-logo">
+                <div>
+                    <h1>Almoxpert</h1>
+                    <p>Solicitação inteligente de materiais</p>
+                </div>
+            </div>
+
+            <nav class="topnav">
+                {% if session.get('admin_logged_in') %}
+                    <a href="{{ url_for('admin_dashboard') }}">Painel ADM</a>
+                    <a href="{{ url_for('logout') }}">Sair</a>
+                {% elif session.get('requester_logged_in') %}
+                    <span class="topnav-user">{{ session.get('requester_nome', '') }}</span>
+                    <a href="{{ url_for('requester_home') }}">Solicitação</a>
+                    <a href="{{ url_for('logout') }}">Sair</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="container page-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-stack">
+                    {% for categoria, mensagem in messages %}
+                        <div class="flash {{ categoria }}">{{ mensagem }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

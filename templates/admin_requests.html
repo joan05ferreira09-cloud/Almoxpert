@@ -1,0 +1,95 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almoxpert | Solicitações{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Solicitações</span>
+        <h2>Controle e aprovação</h2>
+    </div>
+</div>
+
+<section class="panel">
+    <form method="GET" action="{{ url_for('admin_requests') }}" class="toolbar-grid">
+        <div>
+            <label>Buscar</label>
+            <input type="text" name="search" value="{{ current_search }}" placeholder="Nome, item, código, aplicação...">
+        </div>
+        <div>
+            <label>Status</label>
+            <select name="status">
+                <option value="" {% if not current_status %}selected{% endif %}>Todos</option>
+                <option value="PENDENTE" {% if current_status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                <option value="APROVADO" {% if current_status == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                <option value="RECUSADO" {% if current_status == 'RECUSADO' %}selected{% endif %}>Recusado</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <button class="primary-btn" type="submit">Filtrar</button>
+            <a class="outline-btn" href="{{ url_for('admin_requests') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tipo</th>
+                    <th>Solicitante</th>
+                    <th>Setor</th>
+                    <th>Item</th>
+                    <th>Código</th>
+                    <th>Qtd</th>
+                    <th>Uso</th>
+                    <th>Prioridade</th>
+                    <th>Foto</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests_data %}
+                <tr>
+                    <td>#{{ r.id }}</td>
+                    <td>{{ r.tipo }}</td>
+                    <td>
+                        <strong>{{ r.solicitante_nome }}</strong>
+                        {% if r.solicitante_matricula %}<br><small>Matrícula: {{ r.solicitante_matricula }}</small>{% endif %}
+                        {% if r.solicitante_telefone %}<br><small>{{ r.solicitante_telefone }}</small>{% endif %}
+                    </td>
+                    <td>{{ r.solicitante_setor }}</td>
+                    <td>
+                        <strong>{{ r.item_nome }}</strong>
+                        {% if r.observacao %}<br><small>{{ r.observacao }}</small>{% endif %}
+                    </td>
+                    <td>{{ r.item_codigo or '-' }}</td>
+                    <td>{{ r.quantidade or '-' }}</td>
+                    <td>{{ r.onde_sera_usado }}</td>
+                    <td>{{ r.prioridade }}</td>
+                    <td>
+                        {% if r.foto_referencia %}
+                            <a class="table-link" href="{{ url_for('uploaded_file', folder='requests', filename=r.foto_referencia) }}" target="_blank">Ver foto</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td><span class="status-pill {{ r.status|lower }}">{{ r.status }}</span></td>
+                    <td>
+                        <div class="inline-actions">
+                            <a class="action-chip success" href="{{ url_for('update_request_status', request_id=r.id, new_status='APROVADO') }}">Aprovar</a>
+                            <a class="action-chip danger" href="{{ url_for('update_request_status', request_id=r.id, new_status='RECUSADO') }}">Recusar</a>
+                            <a class="action-chip" href="{{ url_for('update_request_status', request_id=r.id, new_status='PENDENTE') }}">Voltar pendente</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="12">Nenhuma solicitação encontrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
