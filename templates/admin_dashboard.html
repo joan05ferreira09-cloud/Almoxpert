@@ -1,109 +1,51 @@
-{% extends 'admin_base.html' %}
-{% block title %}Almoxpert | Dashboard{% endblock %}
+{% extends "admin_base.html" %}
 
-{% block admin_content %}
-<div class="section-header">
-    <div>
-        <span class="eyebrow">Dashboard analítico</span>
-        <h2>KPI geral do almoxarifado</h2>
+{% block content %}
+
+<div class="dashboard-container">
+
+    <div class="dashboard-left">
+        <h2>Painel ADM</h2>
+        <p>Bem-vindo, {{ current_user }}</p>
+
+        <div class="dashboard-buttons">
+            <a href="{{ url_for('admin_products') }}">📦 Produtos</a>
+            <a href="{{ url_for('admin_requests') }}">📋 Solicitações</a>
+            <a href="{{ url_for('admin_users') }}">👥 Usuários</a>
+        </div>
     </div>
+
+    <div class="dashboard-right">
+
+        <h3>KPI Geral</h3>
+
+        <div class="kpi-box">
+            <div>Total: {{ total }}</div>
+            <div>Aprovados: {{ aprovados }}</div>
+            <div>Pendentes: {{ pendentes }}</div>
+            <div>Recusados: {{ recusados }}</div>
+        </div>
+
+        <h3>Últimas solicitações</h3>
+
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>Item</th>
+                <th>Status</th>
+            </tr>
+
+            {% for r in requests %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.item }}</td>
+                <td>{{ r.status }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+    </div>
+
 </div>
 
-<section class="stats-grid stats-grid-4">
-    <article class="stat-card"><span>Total de solicitações</span><strong>{{ total_requests }}</strong></article>
-    <article class="stat-card warning"><span>Pendentes</span><strong>{{ total_pending }}</strong></article>
-    <article class="stat-card success"><span>Aprovadas</span><strong>{{ total_approved }}</strong></article>
-    <article class="stat-card danger"><span>Recusadas</span><strong>{{ total_rejected }}</strong></article>
-    <article class="stat-card info"><span>Produtos ativos</span><strong>{{ total_products }}</strong></article>
-    <article class="stat-card"><span>Solicitantes ativos</span><strong>{{ total_users }}</strong></article>
-    <article class="stat-card danger"><span>Estoque em alerta</span><strong>{{ low_stock }}</strong></article>
-    <article class="stat-card warning"><span>Urgentes em aberto</span><strong>{{ urgent_open }}</strong></article>
-</section>
-
-<section class="panel">
-    <div class="section-header compact">
-        <div>
-            <h3>KPI por setor</h3>
-            <p class="muted">Visão gerencial por origem da demanda.</p>
-        </div>
-    </div>
-
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Setor</th>
-                    <th>Total</th>
-                    <th>Pendentes</th>
-                    <th>Aprovadas</th>
-                    <th>Recusadas</th>
-                    <th>Urgentes</th>
-                    <th>Taxa de aprovação</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in sector_kpis %}
-                <tr>
-                    <td>{{ s.setor }}</td>
-                    <td>{{ s.total }}</td>
-                    <td>{{ s.pendentes }}</td>
-                    <td>{{ s.aprovadas }}</td>
-                    <td>{{ s.recusadas }}</td>
-                    <td>{{ s.urgentes }}</td>
-                    <td>{{ s.taxa_aprovacao }}%</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7">Ainda não há solicitações para gerar KPIs por setor.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<section class="panel">
-    <div class="section-header compact">
-        <div>
-            <h3>Últimas solicitações</h3>
-            <p class="muted">Movimento recente do sistema.</p>
-        </div>
-        <a class="outline-btn" href="{{ url_for('admin_requests') }}">Ver todas</a>
-    </div>
-
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Tipo</th>
-                    <th>Solicitante</th>
-                    <th>Item</th>
-                    <th>Setor</th>
-                    <th>Prioridade</th>
-                    <th>Status</th>
-                    <th>Data</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in latest_requests %}
-                <tr>
-                    <td>#{{ r.id }}</td>
-                    <td>{{ r.tipo }}</td>
-                    <td>{{ r.solicitante_nome }}</td>
-                    <td>{{ r.item_nome }}</td>
-                    <td>{{ r.solicitante_setor }}</td>
-                    <td>{{ r.prioridade }}</td>
-                    <td><span class="status-pill {{ r.status|lower }}">{{ r.status }}</span></td>
-                    <td>{{ r.data_criacao }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="8">Nenhuma solicitação cadastrada ainda.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
 {% endblock %}
