@@ -3,64 +3,48 @@
 
 {% block content %}
 <section class="request-shell">
+
     <div class="request-header">
         <div>
-            <span class="eyebrow">Solicitação rápida</span>
-            <h2>Solicitação inteligente</h2>
-            <p class="muted">Escolha entre solicitar por catálogo, item novo ou acompanhar suas solicitações.</p>
+            <h2>Solicitação de materiais</h2>
+            <p class="muted">Escolha o item ou acompanhe suas solicitações</p>
         </div>
         <div class="request-user-badge">
-            <strong>{{ session.get('requester_nome', '') }}</strong>
-            <span>{{ session.get('requester_setor', '') }}</span>
+            <strong>{{ session.get('requester_nome') }}</strong>
+            <span>{{ session.get('requester_setor') }}</span>
         </div>
     </div>
 
     <div class="request-mode-switch">
-        <button class="tab-button active" data-tab-target="catalogTab">Solicitação</button>
-        <button class="tab-button" data-tab-target="newItemTab">Item novo</button>
+        <button class="tab-button active" data-tab-target="catalogTab">Solicitar</button>
         <button class="tab-button" data-tab-target="analysisTab">Solicitações em análise</button>
     </div>
 
     <!-- SOLICITAÇÃO -->
     <section id="catalogTab" class="tab-content active">
-        <div class="catalog-layout simplified">
+        <div class="catalog-layout">
 
             <div class="form-card">
-                <form method="POST" action="{{ url_for('solicitar_catalogo') }}" class="form-grid">
+                <form method="POST" action="{{ url_for('solicitar_catalogo') }}">
 
-                    <div class="full">
-                        <label>Buscar item</label>
-                        <input type="text" id="catalogSearchInput">
-                        <input type="hidden" id="selectedProductId" name="product_id">
-                        <input type="hidden" id="selectedProductName" name="item_nome">
-                        <input type="hidden" id="selectedProductCode" name="item_codigo">
-                    </div>
+                    <label>Buscar item</label>
+                    <input type="text" id="catalogSearchInput">
 
-                    <div class="full selected-product-box" id="selectedProductBox">
+                    <input type="hidden" id="selectedProductId" name="product_id">
+                    <input type="hidden" id="selectedProductName" name="item_nome">
+                    <input type="hidden" id="selectedProductCode" name="item_codigo">
+
+                    <div id="selectedProductBox" style="margin:10px 0;">
                         Nenhum item selecionado
                     </div>
 
-                    <div>
-                        <label>Quantidade</label>
-                        <input type="number" name="quantidade">
-                    </div>
+                    <label>Quantidade</label>
+                    <input type="number" name="quantidade" required>
 
-                    <div>
-                        <label>Prioridade</label>
-                        <select name="prioridade">
-                            <option>Normal</option>
-                            <option>Urgente</option>
-                        </select>
-                    </div>
+                    <label>Onde será usado</label>
+                    <textarea name="onde_sera_usado"></textarea>
 
-                    <div class="full">
-                        <label>Onde será usado</label>
-                        <textarea name="onde_sera_usado"></textarea>
-                    </div>
-
-                    <div class="full">
-                        <button class="primary-btn">Enviar solicitação</button>
-                    </div>
+                    <button class="primary-btn">Enviar</button>
 
                 </form>
             </div>
@@ -75,23 +59,20 @@
 
     <!-- ACOMPANHAMENTO -->
     <section id="analysisTab" class="tab-content">
-        <div class="panel">
-            <h3>Solicitações em análise</h3>
+        <h3>Solicitações em análise</h3>
 
-            <table style="width:100%">
-                <thead>
-                    <tr>
-                        <th>Nº</th>
-                        <th>Item</th>
-                        <th>Qtd</th>
-                        <th>Status</th>
-                        <th>Retorno</th>
-                    </tr>
-                </thead>
-                <tbody id="myRequests"></tbody>
-            </table>
-
-        </div>
+        <table style="width:100%">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Item</th>
+                    <th>Qtd</th>
+                    <th>Status</th>
+                    <th>Retorno</th>
+                </tr>
+            </thead>
+            <tbody id="myRequests"></tbody>
+        </table>
     </section>
 
 </section>
