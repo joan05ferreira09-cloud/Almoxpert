@@ -1051,3 +1051,24 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port)
 else:
     init_db()
+@app.route("/minhas-solicitacoes")
+def minhas_solicitacoes():
+    conn = get_conn()
+
+    data = conn.execute(
+        "SELECT * FROM requests WHERE requester_user_id = ? ORDER BY id DESC",
+        (session["requester_user_id"],)
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify([
+        {
+            "id": r["id"],
+            "item": r["item_nome"],
+            "quantidade": r["quantidade"],
+            "status": r["status"],
+            "retorno": r["retorno_almoxarifado"] or ""
+        }
+        for r in data
+    ])
