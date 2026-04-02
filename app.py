@@ -34,6 +34,9 @@ os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(REQUEST_UPLOAD_DIR, exist_ok=True)
 
 
+# =========================================================
+# HELPERS
+# =========================================================
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -63,6 +66,7 @@ def save_uploaded_file(file_storage, folder_path: str):
         return None
     if not allowed_file(file_storage.filename):
         return None
+
     original_name = secure_filename(file_storage.filename)
     ext = original_name.rsplit(".", 1)[1].lower()
     filename = f"{uuid4().hex}.{ext}"
@@ -77,10 +81,14 @@ def create_default_username(nome: str, matricula: str | None, user_id: int) -> s
     return cleaned[:18]
 
 
+# =========================================================
+# DATABASE
+# =========================================================
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
+    # Admin
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS admin_users (
@@ -95,6 +103,7 @@ def init_db():
         """
     )
 
+    # Produtos
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS products (
@@ -115,6 +124,7 @@ def init_db():
         """
     )
 
+    # Solicitantes
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS requester_users (
@@ -142,6 +152,7 @@ def init_db():
         "force_password_change INTEGER NOT NULL DEFAULT 1",
     )
 
+    # Solicitações
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS requests (
@@ -159,16 +170,29 @@ def init_db():
             observacao TEXT,
             foto_referencia TEXT,
             product_id INTEGER,
-            status TEXT NOT NULL DEFAULT 'PENDENTE',
+            requester_user_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'EM_ANALISE',
+            retorno_almoxarifado TEXT,
             data_criacao TEXT NOT NULL,
             data_atualizacao TEXT NOT NULL,
-            FOREIGN KEY (product_id) REFERENCES products (id)
+            FOREIGN KEY (product_id) REFERENCES products (id),
+            FOREIGN KEY (requester_user_id) REFERENCES requester_users (id)
         )
         """
     )
 
+    # Garante colunas novas em bases antigas
+    ensure_column(conn, "requests", "requester_user_id", "requester_user_id INTEGER")
+    ensure_column(conn, "requests", "retorno_almoxarifado", "retorno_almoxarifado TEXT")
+
     now = now_db()
-    admin_exists = cur.execute("SELECT id FROM admin_users WHERE usuario = ?", ("Joan",)).fetchone()
+
+    # Admin inicial
+    admin_exists = cur.execute(
+        "SELECT id FROM admin_users WHERE usuario = ?",
+        ("Joan",)
+    ).fetchone()
+
     if not admin_exists:
         cur.execute(
             """
@@ -178,6 +202,7 @@ def init_db():
             ("Joan", "Joan", "Maeve0306@", now, now),
         )
 
+    # Corrigir usuários antigos sem login
     users_without_login = cur.execute(
         "SELECT id, nome, matricula FROM requester_users WHERE COALESCE(usuario, '') = ''"
     ).fetchall()
@@ -203,10 +228,22 @@ def init_db():
             (username, f"{username}@123", now, user["id"]),
         )
 
+    # Atualiza status antigos, se existirem
+    cur.execute(
+        """
+        UPDATE requests
+        SET status = 'EM_ANALISE'
+        WHERE status IS NULL OR TRIM(status) = ''
+        """
+    )
+
     conn.commit()
     conn.close()
 
 
+# =========================================================
+# AUTH
+# =========================================================
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped(*args, **kwargs):
@@ -214,7 +251,6 @@ def admin_required(view_func):
             flash("Faça login para acessar o painel administrativo.", "erro")
             return redirect(url_for("login"))
         return view_func(*args, **kwargs)
-
     return wrapped
 
 
@@ -228,10 +264,12 @@ def requester_required(view_func):
             flash("No primeiro acesso, troque sua senha para continuar.", "erro")
             return redirect(url_for("change_requester_password"))
         return view_func(*args, **kwargs)
-
     return wrapped
 
 
+# =========================================================
+# MAIN
+# =========================================================
 @app.route("/")
 def home():
     if session.get("admin_logged_in"):
@@ -311,7 +349,11 @@ def change_requester_password():
 
         conn = get_conn()
         conn.execute(
-            "UPDATE requester_users SET senha = ?, force_password_change = 0, updated_at = ? WHERE id = ?",
+            """
+            UPDATE requester_users
+            SET senha = ?, force_password_change = 0, updated_at = ?
+            WHERE id = ?
+            """,
             (nova_senha, now_db(), session["requester_user_id"]),
         )
         conn.commit()
@@ -331,6 +373,9 @@ def logout():
     return redirect(url_for("login"))
 
 
+# =========================================================
+# REQUESTER AREA
+# =========================================================
 @app.route("/solicitante")
 @requester_required
 def requester_home():
@@ -381,6 +426,7 @@ def catalog_search():
                 ),
             }
         )
+
     return jsonify(result)
 
 
@@ -418,8 +464,9 @@ def solicitar_catalogo():
         INSERT INTO requests (
             tipo, solicitante_nome, solicitante_setor, solicitante_matricula, solicitante_telefone,
             item_nome, item_codigo, quantidade, onde_sera_usado, prioridade, observacao,
-            foto_referencia, product_id, status, data_criacao, data_atualizacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDENTE', ?, ?)
+            foto_referencia, product_id, requester_user_id, status, retorno_almoxarifado,
+            data_criacao, data_atualizacao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "CATALOGO",
@@ -435,6 +482,9 @@ def solicitar_catalogo():
             observacao,
             None,
             product_id,
+            session["requester_user_id"],
+            "EM_ANALISE",
+            "Solicitação recebida. Estamos verificando a disponibilidade do item.",
             now_br(),
             now_br(),
         ),
@@ -486,8 +536,9 @@ def solicitar_item_novo():
         INSERT INTO requests (
             tipo, solicitante_nome, solicitante_setor, solicitante_matricula, solicitante_telefone,
             item_nome, item_codigo, quantidade, onde_sera_usado, prioridade, observacao,
-            foto_referencia, product_id, status, data_criacao, data_atualizacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDENTE', ?, ?)
+            foto_referencia, product_id, requester_user_id, status, retorno_almoxarifado,
+            data_criacao, data_atualizacao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "ITEM_NOVO",
@@ -503,6 +554,9 @@ def solicitar_item_novo():
             observacao,
             foto_filename,
             None,
+            session["requester_user_id"],
+            "EM_ANALISE",
+            "Solicitação recebida. Estamos analisando o item solicitado.",
             now_br(),
             now_br(),
         ),
@@ -514,55 +568,96 @@ def solicitar_item_novo():
     return redirect(url_for("requester_home"))
 
 
+@app.route("/minhas-solicitacoes")
+@requester_required
+def minhas_solicitacoes():
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM requests
+        WHERE requester_user_id = ?
+        ORDER BY id DESC
+        """,
+        (session["requester_user_id"],),
+    ).fetchall()
+    conn.close()
+
+    return jsonify([
+        {
+            "id": r["id"],
+            "data": r["data_criacao"],
+            "item": r["item_nome"],
+            "codigo": r["item_codigo"] or "-",
+            "quantidade": r["quantidade"] or "-",
+            "status": r["status"],
+            "retorno": r["retorno_almoxarifado"] or "",
+            "tipo": r["tipo"],
+        }
+        for r in rows
+    ])
+
+
+# =========================================================
+# ADMIN
+# =========================================================
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
     conn = get_conn()
 
     total_requests = conn.execute("SELECT COUNT(*) AS total FROM requests").fetchone()["total"]
-    total_pending = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'PENDENTE'").fetchone()["total"]
-    total_approved = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'APROVADO'").fetchone()["total"]
-    total_rejected = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'RECUSADO'").fetchone()["total"]
+    total_em_analise = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'EM_ANALISE'").fetchone()["total"]
+    total_favor_retirar = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'FAVOR_RETIRAR'").fetchone()["total"]
+    total_em_compra = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'EM_FASE_COMPRA'").fetchone()["total"]
+    total_negado = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'NEGADO'").fetchone()["total"]
+    total_concluido = conn.execute("SELECT COUNT(*) AS total FROM requests WHERE status = 'CONCLUIDO'").fetchone()["total"]
+
     total_products = conn.execute("SELECT COUNT(*) AS total FROM products WHERE ativo = 1").fetchone()["total"]
     total_users = conn.execute("SELECT COUNT(*) AS total FROM requester_users WHERE ativo = 1").fetchone()["total"]
     low_stock = conn.execute(
         "SELECT COUNT(*) AS total FROM products WHERE ativo = 1 AND estoque_atual <= estoque_minimo"
     ).fetchone()["total"]
-    urgent_open = conn.execute(
-        "SELECT COUNT(*) AS total FROM requests WHERE status = 'PENDENTE' AND prioridade = 'Urgente'"
-    ).fetchone()["total"]
 
-    latest_requests = conn.execute("SELECT * FROM requests ORDER BY id DESC LIMIT 8").fetchall()
+    latest_requests = conn.execute(
+        "SELECT * FROM requests ORDER BY id DESC LIMIT 8"
+    ).fetchall()
 
     sector_kpis = conn.execute(
         """
         SELECT
             COALESCE(solicitante_setor, 'Não informado') AS setor,
             COUNT(*) AS total,
-            SUM(CASE WHEN status = 'PENDENTE' THEN 1 ELSE 0 END) AS pendentes,
-            SUM(CASE WHEN status = 'APROVADO' THEN 1 ELSE 0 END) AS aprovadas,
-            SUM(CASE WHEN status = 'RECUSADO' THEN 1 ELSE 0 END) AS recusadas,
-            SUM(CASE WHEN prioridade = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
-            ROUND((SUM(CASE WHEN status = 'APROVADO' THEN 1 ELSE 0 END) * 100.0) / COUNT(*), 1) AS taxa_aprovacao
+            SUM(CASE WHEN status = 'EM_ANALISE' THEN 1 ELSE 0 END) AS em_analise,
+            SUM(CASE WHEN status = 'FAVOR_RETIRAR' THEN 1 ELSE 0 END) AS favor_retirar,
+            SUM(CASE WHEN status = 'EM_FASE_COMPRA' THEN 1 ELSE 0 END) AS em_fase_compra,
+            SUM(CASE WHEN status = 'NEGADO' THEN 1 ELSE 0 END) AS negado,
+            SUM(CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END) AS concluido
         FROM requests
         GROUP BY COALESCE(solicitante_setor, 'Não informado')
         ORDER BY total DESC, setor ASC
         """
     ).fetchall()
+
     conn.close()
 
     return render_template(
         "admin_dashboard.html",
         total_requests=total_requests,
-        total_pending=total_pending,
-        total_approved=total_approved,
-        total_rejected=total_rejected,
+        total_pending=total_em_analise,
+        total_approved=total_favor_retirar,
+        total_rejected=total_negado,
         total_products=total_products,
         total_users=total_users,
         low_stock=low_stock,
-        urgent_open=urgent_open,
+        urgent_open=total_em_compra,
         latest_requests=latest_requests,
         sector_kpis=sector_kpis,
+        total_em_analise=total_em_analise,
+        total_favor_retirar=total_favor_retirar,
+        total_em_compra=total_em_compra,
+        total_negado=total_negado,
+        total_concluido=total_concluido,
     )
 
 
@@ -575,14 +670,22 @@ def admin_requests():
     query = "SELECT * FROM requests WHERE 1=1"
     params = []
 
-    if status in {"PENDENTE", "APROVADO", "RECUSADO"}:
+    if status in {"EM_ANALISE", "FAVOR_RETIRAR", "EM_FASE_COMPRA", "NEGADO", "CONCLUIDO"}:
         query += " AND status = ?"
         params.append(status)
 
     if search:
         like = f"%{search}%"
-        query += " AND (solicitante_nome LIKE ? OR item_nome LIKE ? OR COALESCE(item_codigo, '') LIKE ? OR COALESCE(onde_sera_usado, '') LIKE ?)"
-        params.extend([like, like, like, like])
+        query += """
+            AND (
+                solicitante_nome LIKE ?
+                OR item_nome LIKE ?
+                OR COALESCE(item_codigo, '') LIKE ?
+                OR COALESCE(onde_sera_usado, '') LIKE ?
+                OR COALESCE(retorno_almoxarifado, '') LIKE ?
+            )
+        """
+        params.extend([like, like, like, like, like])
 
     query += " ORDER BY id DESC"
 
@@ -598,114 +701,49 @@ def admin_requests():
     )
 
 
-@app.route("/admin/solicitacoes/<int:request_id>/status/<string:new_status>")
+@app.route("/admin/solicitacoes/<int:request_id>/status/<string:new_status>", methods=["POST"])
 @admin_required
 def update_request_status(request_id, new_status):
     new_status = new_status.upper()
+    allowed_status = {"EM_ANALISE", "FAVOR_RETIRAR", "EM_FASE_COMPRA", "NEGADO", "CONCLUIDO"}
 
-    if new_status not in {"PENDENTE", "APROVADO", "RECUSADO"}:
+    if new_status not in allowed_status:
         flash("Status inválido.", "erro")
         return redirect(url_for("admin_requests"))
 
+    retorno = request.form.get("retorno_almoxarifado", "").strip()
+
+    retorno_padrao = {
+        "EM_ANALISE": "Estamos verificando a disponibilidade do item.",
+        "FAVOR_RETIRAR": "O item está disponível. Favor retirar no almoxarifado.",
+        "EM_FASE_COMPRA": "O item não está disponível em estoque. Já foi iniciado o processo de compra.",
+        "NEGADO": "A solicitação foi negada por motivos internos.",
+        "CONCLUIDO": "Solicitação finalizada.",
+    }
+
+    if not retorno:
+        retorno = retorno_padrao.get(new_status, "")
+
     conn = get_conn()
+    req = conn.execute("SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
 
-    solicitacao = conn.execute(
-        "SELECT * FROM requests WHERE id = ?",
-        (request_id,),
-    ).fetchone()
-
-    if not solicitacao:
+    if not req:
         conn.close()
         flash("Solicitação não encontrada.", "erro")
         return redirect(url_for("admin_requests"))
 
-    status_atual = (solicitacao["status"] or "").upper()
-    tipo = (solicitacao["tipo"] or "").upper()
-    product_id = solicitacao["product_id"]
-
-    try:
-        quantidade = int(solicitacao["quantidade"] or 0)
-    except (TypeError, ValueError):
-        quantidade = 0
-
-    produto = None
-    if product_id:
-        produto = conn.execute(
-            "SELECT * FROM products WHERE id = ? AND ativo = 1",
-            (product_id,),
-        ).fetchone()
-
-    try:
-        if status_atual == "APROVADO" and new_status in {"PENDENTE", "RECUSADO"}:
-            if tipo == "CATALOGO" and produto and quantidade > 0:
-                novo_estoque = int(produto["estoque_atual"] or 0) + quantidade
-                conn.execute(
-                    """
-                    UPDATE products
-                    SET estoque_atual = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (novo_estoque, now_db(), product_id),
-                )
-
-        if status_atual != "APROVADO" and new_status == "APROVADO":
-            if tipo == "CATALOGO":
-                if not produto:
-                    conn.close()
-                    flash("Produto vinculado não encontrado para baixar o estoque.", "erro")
-                    return redirect(url_for("admin_requests"))
-
-                estoque_atual = int(produto["estoque_atual"] or 0)
-
-                if quantidade <= 0:
-                    conn.close()
-                    flash("Quantidade inválida na solicitação.", "erro")
-                    return redirect(url_for("admin_requests"))
-
-                if estoque_atual < quantidade:
-                    conn.close()
-                    flash(
-                        f"Estoque insuficiente para aprovar. Disponível: {estoque_atual} | Solicitado: {quantidade}.",
-                        "erro",
-                    )
-                    return redirect(url_for("admin_requests"))
-
-                novo_estoque = estoque_atual - quantidade
-                conn.execute(
-                    """
-                    UPDATE products
-                    SET estoque_atual = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (novo_estoque, now_db(), product_id),
-                )
-
-        conn.execute(
-            """
-            UPDATE requests
-            SET status = ?, data_atualizacao = ?
-            WHERE id = ?
-            """,
-            (new_status, now_br(), request_id),
-        )
-
-        conn.commit()
-
-    except Exception:
-        conn.rollback()
-        conn.close()
-        flash("Erro ao atualizar a solicitação.", "erro")
-        return redirect(url_for("admin_requests"))
-
+    conn.execute(
+        """
+        UPDATE requests
+        SET status = ?, retorno_almoxarifado = ?, data_atualizacao = ?
+        WHERE id = ?
+        """,
+        (new_status, retorno, now_br(), request_id),
+    )
+    conn.commit()
     conn.close()
 
-    if status_atual != "APROVADO" and new_status == "APROVADO" and tipo == "CATALOGO":
-        flash("Solicitação aprovada e estoque baixado automaticamente.", "sucesso")
-    elif status_atual == "APROVADO" and new_status in {"PENDENTE", "RECUSADO"} and tipo == "CATALOGO":
-        flash("Status alterado e estoque devolvido automaticamente.", "sucesso")
-    else:
-        flash(f"Solicitação atualizada para {new_status}.", "sucesso")
-
+    flash(f"Solicitação #{request_id} atualizada com sucesso.", "sucesso")
     return redirect(url_for("admin_requests"))
 
 
@@ -732,12 +770,7 @@ def admin_products():
     products = conn.execute(query, params).fetchall()
     conn.close()
 
-    return render_template(
-        "admin_products.html",
-        products=products,
-        current_search=search,
-        low_stock=only_low,
-    )
+    return render_template("admin_products.html", products=products, current_search=search, low_stock=only_low)
 
 
 @app.route("/admin/produtos/novo", methods=["GET", "POST"])
@@ -919,7 +952,6 @@ def admin_users():
         like = f"%{search}%"
         query += " AND (nome LIKE ? OR COALESCE(setor, '') LIKE ? OR COALESCE(matricula, '') LIKE ? OR COALESCE(usuario, '') LIKE ?)"
         params.extend([like, like, like, like])
-
     query += " ORDER BY nome COLLATE NOCASE ASC"
 
     conn = get_conn()
@@ -1002,7 +1034,6 @@ def admin_user_edit(user_id):
             return redirect(url_for("admin_user_edit", user_id=user_id))
 
         final_password = senha if senha else user["senha"]
-
         conn.execute(
             """
             UPDATE requester_users
@@ -1036,6 +1067,9 @@ def admin_user_delete(user_id):
     return redirect(url_for("admin_users"))
 
 
+# =========================================================
+# FILES
+# =========================================================
 @app.route("/uploads/<folder>/<filename>")
 def uploaded_file(folder, filename):
     if folder == "products":
@@ -1045,30 +1079,12 @@ def uploaded_file(folder, filename):
     return "Arquivo não encontrado", 404
 
 
+# =========================================================
+# RUN
+# =========================================================
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 else:
     init_db()
-@app.route("/minhas-solicitacoes")
-def minhas_solicitacoes():
-    conn = get_conn()
-
-    data = conn.execute(
-        "SELECT * FROM requests WHERE requester_user_id = ? ORDER BY id DESC",
-        (session["requester_user_id"],)
-    ).fetchall()
-
-    conn.close()
-
-    return jsonify([
-        {
-            "id": r["id"],
-            "item": r["item_nome"],
-            "quantidade": r["quantidade"],
-            "status": r["status"],
-            "retorno": r["retorno_almoxarifado"] or ""
-        }
-        for r in data
-    ])
