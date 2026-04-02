@@ -1,26 +1,57 @@
-<td>
-    <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='EM_ANALISE') }}">
-        <input name="retorno_almoxarifado">
-        <button>Em análise</button>
-    </form>
+{% extends 'admin_base.html' %}
 
-    <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='FAVOR_RETIRAR') }}">
-        <input name="retorno_almoxarifado">
-        <button>Favor retirar</button>
-    </form>
+{% block admin_content %}
+<h2>Solicitações</h2>
 
-    <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='EM_FASE_COMPRA') }}">
-        <input name="retorno_almoxarifado">
-        <button>Em compra</button>
-    </form>
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Item</th>
+            <th>Status</th>
+            <th>Retorno</th>
+            <th>Ação</th>
+        </tr>
+    </thead>
 
-    <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='NEGADO') }}">
-        <input name="retorno_almoxarifado">
-        <button>Negado</button>
-    </form>
+    <tbody>
+        {% for r in requests_data %}
+        <tr>
+            <td>#{{ r.id }}</td>
+            <td>{{ r.item_nome }}</td>
+            <td>{{ r.status }}</td>
+            <td>{{ r.retorno_almoxarifado }}</td>
 
-    <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='CONCLUIDO') }}">
-        <input name="retorno_almoxarifado">
-        <button>Concluído</button>
-    </form>
-</td>
+            <td>
+                <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='EM_ANALISE') }}">
+                    <input name="retorno_almoxarifado">
+                    <button>Em análise</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='FAVOR_RETIRAR') }}">
+                    <input name="retorno_almoxarifado">
+                    <button>Retirar</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='EM_FASE_COMPRA') }}">
+                    <input name="retorno_almoxarifado">
+                    <button>Compra</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='NEGADO') }}">
+                    <input name="retorno_almoxarifado">
+                    <button>Negar</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('update_request_status', request_id=r.id, new_status='CONCLUIDO') }}">
+                    <input name="retorno_almoxarifado">
+                    <button>Concluir</button>
+                </form>
+            </td>
+
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
