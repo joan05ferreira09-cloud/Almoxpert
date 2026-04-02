@@ -6,32 +6,32 @@ function carregarSolicitacoes() {
     fetch('/minhas-solicitacoes')
         .then(res => res.json())
         .then(data => {
-            const tbody = document.getElementById('myRequests');
+            const tabela = document.getElementById('myRequests');
 
             if (!data.length) {
-                tbody.innerHTML = `<tr><td colspan="5">Nenhuma solicitação</td></tr>`;
+                tabela.innerHTML = `<tr><td colspan="5">Nenhuma solicitação</td></tr>`;
                 return;
             }
 
-            tbody.innerHTML = data.map(r => `
+            tabela.innerHTML = data.map(item => `
                 <tr>
-                    <td>#${r.id}</td>
-                    <td>${r.item}</td>
-                    <td>${r.quantidade}</td>
-                    <td>${traduzirStatus(r.status)}</td>
-                    <td>${r.retorno}</td>
+                    <td>#${item.id}</td>
+                    <td>${item.item}</td>
+                    <td>${item.quantidade}</td>
+                    <td>${traduzirStatus(item.status)}</td>
+                    <td>${item.retorno}</td>
                 </tr>
             `).join('');
         });
 }
 
 function traduzirStatus(status) {
-    const mapa = {
+    const map = {
         EM_ANALISE: "Em análise",
-        FAVOR_RETIRAR: "Favor retirar no almoxarifado",
+        FAVOR_RETIRAR: "Favor retirar",
         EM_FASE_COMPRA: "Em fase de compra",
         NEGADO: "Negado",
         CONCLUIDO: "Concluído"
     };
-    return mapa[status] || status;
+    return map[status] || status;
 }
