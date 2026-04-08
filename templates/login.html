@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Almoxpert | Acesso{% endblock %}
+
+{% block content %}
+<section class="login-shell">
+    <div class="login-card">
+        <div class="login-brand">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Almoxpert" class="login-logo">
+        </div>
+        <span class="eyebrow">Acesso ao sistema</span>
+        <h2>Entrar no Almoxpert</h2>
+        <p class="muted">Colaboradores entram com o login fornecido e trocam a senha no primeiro acesso. O administrador pode usar o mesmo painel para acessar a área de gestão.</p>
+
+        <form method="POST" action="{{ url_for('login') }}" class="form-grid single-col compact-form">
+            <div>
+                <label>Login</label>
+                <input type="text" name="usuario" required autocomplete="username">
+            </div>
+            <div>
+                <label>Senha</label>
+                <input type="password" name="senha" required autocomplete="current-password">
+            </div>
+            <div>
+                <button type="submit" class="primary-btn">Entrar</button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

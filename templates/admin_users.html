@@ -1,0 +1,69 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almoxpert | Solicitantes{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Cadastro de usuários</span>
+        <h2>Solicitantes</h2>
+    </div>
+    <a class="primary-btn link-btn" href="{{ url_for('admin_user_new') }}">Novo solicitante</a>
+</div>
+
+<section class="panel">
+    <form method="GET" action="{{ url_for('admin_users') }}" class="toolbar-grid">
+        <div>
+            <label>Buscar</label>
+            <input type="text" name="search" value="{{ current_search }}" placeholder="Nome, setor, matrícula, login...">
+        </div>
+        <div class="toolbar-actions stretch">
+            <button class="primary-btn" type="submit">Filtrar</button>
+            <a class="outline-btn" href="{{ url_for('admin_users') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Setor</th>
+                    <th>Matrícula</th>
+                    <th>Login</th>
+                    <th>Troca de senha</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>#{{ u.id }}</td>
+                    <td>{{ u.nome }}</td>
+                    <td>{{ u.setor or '-' }}</td>
+                    <td>{{ u.matricula or '-' }}</td>
+                    <td>{{ u.usuario or '-' }}</td>
+                    <td>
+                        {% if u.force_password_change %}
+                        <span class="status-pill pendente">Pendente</span>
+                        {% else %}
+                        <span class="status-pill aprovado">Concluída</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="inline-actions">
+                            <a class="action-chip" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Editar</a>
+                            <a class="action-chip danger" href="{{ url_for('admin_user_delete', user_id=u.id) }}" onclick="return confirm('Deseja excluir este solicitante?');">Excluir</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7">Nenhum solicitante cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

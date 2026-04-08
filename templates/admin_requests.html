@@ -1,0 +1,111 @@
+{% extends 'admin_base.html' %}
+{% block title %}Almoxpert | Solicitações{% endblock %}
+
+{% block admin_content %}
+<div class="section-header">
+    <div>
+        <span class="eyebrow">Solicitações</span>
+        <h2>Controle e aprovação</h2>
+    </div>
+</div>
+
+<section class="panel">
+    <form method="GET" action="{{ url_for('admin_requests') }}" class="toolbar-grid">
+        <div>
+            <label>Buscar</label>
+            <input type="text" name="search" value="{{ current_search }}" placeholder="Nome, item, código, aplicação, nome técnico...">
+        </div>
+        <div>
+            <label>Status</label>
+            <select name="status">
+                <option value="" {% if not current_status %}selected{% endif %}>Todos</option>
+                <option value="VERIFICANDO_DISPONIBILIDADE" {% if current_status == 'VERIFICANDO_DISPONIBILIDADE' %}selected{% endif %}>Verificação de disponibilidade</option>
+                <option value="LIBERADO_RETIRADA" {% if current_status == 'LIBERADO_RETIRADA' %}selected{% endif %}>Produto liberado</option>
+                <option value="EM_PROCESSO_COMPRA" {% if current_status == 'EM_PROCESSO_COMPRA' %}selected{% endif %}>Em processo de compra</option>
+                <option value="PENDENTE" {% if current_status == 'PENDENTE' %}selected{% endif %}>Pendente legado</option>
+                <option value="APROVADO" {% if current_status == 'APROVADO' %}selected{% endif %}>Aprovado legado</option>
+                <option value="RECUSADO" {% if current_status == 'RECUSADO' %}selected{% endif %}>Recusado</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <button class="primary-btn" type="submit">Filtrar</button>
+            <a class="outline-btn" href="{{ url_for('admin_requests') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="analysis-status-legend admin-legend">
+        <div class="legend-card warning"><strong>Verificação de disponibilidade</strong><span>Verificar se o item existe em estoque.</span></div>
+        <div class="legend-card success"><strong>Produto liberado</strong><span>Item disponível para retirada.</span></div>
+        <div class="legend-card info"><strong>Em processo de compra</strong><span>Item enviado ao setor de compras.</span></div>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tipo</th>
+                    <th>Solicitante</th>
+                    <th>Setor</th>
+                    <th>Item</th>
+                    <th>Nome técnico</th>
+                    <th>Código</th>
+                    <th>Qtd</th>
+                    <th>Uso</th>
+                    <th>Prioridade</th>
+                    <th>Foto</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests_data %}
+                <tr>
+                    <td>#{{ r.id }}</td>
+                    <td>{{ r.tipo }}</td>
+                    <td>
+                        <strong>{{ r.solicitante_nome }}</strong>
+                        {% if r.solicitante_matricula %}<br><small>Matrícula: {{ r.solicitante_matricula }}</small>{% endif %}
+                        {% if r.solicitante_telefone %}<br><small>{{ r.solicitante_telefone }}</small>{% endif %}
+                    </td>
+                    <td>{{ r.solicitante_setor }}</td>
+                    <td>
+                        <strong>{{ r.item_nome }}</strong>
+                        {% if r.observacao %}<br><small>{{ r.observacao }}</small>{% endif %}
+                    </td>
+                    <td>{{ r.nome_tecnico or '-' }}</td>
+                    <td>{{ r.item_codigo or '-' }}</td>
+                    <td>{{ r.quantidade or '-' }}</td>
+                    <td>{{ r.onde_sera_usado }}</td>
+                    <td>{{ r.prioridade }}</td>
+                    <td>
+                        {% if r.foto_referencia %}
+                            <a class="table-link" href="{{ url_for('uploaded_file', folder='requests', filename=r.foto_referencia) }}" target="_blank">Ver foto</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-pill {{ r.status_class }}">{{ r.status_label }}</span>
+                        <br><small>{{ r.status_description }}</small>
+                    </td>
+                    <td>
+                        <div class="inline-actions column-actions">
+                            <a class="action-chip" href="{{ url_for('update_request_status', request_id=r.id, new_status='VERIFICANDO_DISPONIBILIDADE') }}">Verificar disponibilidade</a>
+                            <a class="action-chip success" href="{{ url_for('update_request_status', request_id=r.id, new_status='LIBERADO_RETIRADA') }}">Produto liberado</a>
+                            <a class="action-chip info" href="{{ url_for('update_request_status', request_id=r.id, new_status='EM_PROCESSO_COMPRA') }}">Em processo de compra</a>
+                            <a class="action-chip danger" href="{{ url_for('update_request_status', request_id=r.id, new_status='RECUSADO') }}">Recusar</a>
+                            <a class="action-chip" href="{{ url_for('update_request_status', request_id=r.id, new_status='PENDENTE') }}">Voltar pendente legado</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="13">Nenhuma solicitação encontrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
