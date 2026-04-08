@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="admin-shell">
+    <aside class="admin-sidebar">
+        <div class="admin-profile">
+            <span class="eyebrow">Gestão</span>
+            <h3>{{ session.get('admin_nome') or session.get('requester_nome', 'Usuário') }}</h3>
+            <p>{% if is_general_admin %}Controle geral do Almoxpert{% else %}Painel do setor {{ session.get("requester_setor", "") }}{% endif %}</p>
+        </div>
+
+        <nav class="admin-menu">
+            <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint == 'admin_dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('admin_requests') }}" class="{% if request.endpoint == 'admin_requests' or request.endpoint == 'update_request_status' %}active{% endif %}">Solicitações</a>
+            <a href="{{ url_for('admin_products') }}" class="{% if 'product' in request.endpoint or request.endpoint == 'admin_products' %}active{% endif %}">Produtos</a>
+            {% if is_general_admin %}
+            <a href="{{ url_for('admin_users') }}" class="{% if 'admin_user' in request.endpoint or request.endpoint == 'admin_users' %}active{% endif %}">Colaboradores</a>
+            {% endif %}
+        </nav>
+    </aside>
+
+    <div class="admin-main">
+        {% block admin_content %}{% endblock %}
+    </div>
+</section>
+{% endblock %}

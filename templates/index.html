@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}Almoxpert | Solicitação{% endblock %}
+
+{% block content %}
+<section class="request-shell">
+    <div class="request-header">
+        <div>
+            <span class="eyebrow">Solicitação rápida</span>
+            <h2>Solicitação inteligente</h2>
+            <p class="muted">Escolha uma das opções disponíveis para o seu acesso.</p>
+        </div>
+        <div class="request-user-badge">
+            <strong>{{ session.get('requester_nome', '') }}</strong>
+            <span>{{ session.get('requester_setor', '') }}</span>
+        </div>
+    </div>
+
+    <div class="request-mode-switch">
+        {% if can_request_catalog %}
+        <button type="button" class="tab-button active" data-tab-target="catalogTab">Solicitar por catálogo</button>
+        {% endif %}
+        {% if can_request_new_item %}
+        <button type="button" class="tab-button {% if not can_request_catalog %}active{% endif %}" data-tab-target="newItemTab">Nova solicitação</button>
+        {% endif %}
+        <button type="button" class="tab-button {% if not can_request_catalog and not can_request_new_item %}active{% endif %}" data-tab-target="historyTab">Solicitações e análises</button>
+    </div>
+
+    {% if can_request_catalog %}
+    <section id="catalogTab" class="tab-content active">
+        <div class="catalog-layout simplified">
+            <div class="form-card">
+                <form method="POST" action="{{ url_for('solicitar_catalogo') }}" class="form-grid compact-form">
+                    <div class="full">
+                        <label>Buscar item no catálogo</label>
+                        <input type="text" id="catalogSearchInput" placeholder="Ex.: disco flap, luva, parafuso, óleo..." autocomplete="off">
+                        <input type="hidden" id="selectedProductId" name="product_id">
+                        <input type="hidden" id="selectedProductName" name="item_nome" required>
+                        <input type="hidden" id="selectedProductCode" name="item_codigo">
+                    </div>
+
+                    <div class="full selected-product-box" id="selectedProductBox">
+                        <div class="selected-product-placeholder">
+                            Nenhum item selecionado ainda.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Quantidade</label>
+                        <input type="number" min="1" name="quantidade" required>
+                    </div>
+                    <div>
+                        <label>Prioridade</label>
+                        <select name="prioridade" required>
+                            <option value="Normal">Normal</option>
+                            <option value="Urgente">Urgente</option>
+                            <option value="Programada">Programada</option>
+                        </select>
+                    </div>
+                    <div class="full">
+                        <label>Onde será usado</label>
+                        <textarea name="onde_sera_usado" rows="3" required placeholder="Ex.: manutenção da linha 2, setor de embalagem, produção..."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Observação</label>
+                        <textarea name="observacao" rows="3" placeholder="Detalhes adicionais, urgência, finalidade, observações."></textarea>
+                    </div>
+                    <div class="full">
+                        <button class="primary-btn" type="submit">Enviar solicitação</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="catalog-results-card">
+                <div class="catalog-results-header">
+                    <h3>Catálogo visual inteligente</h3>
+                    <p class="muted">As fotos, os códigos e os dados do item aparecem conforme você digita.</p>
+                </div>
+                <div id="catalogResults" class="catalog-results-grid empty-state-grid">
+                    <div class="empty-state">
+                        Digite pelo menos 2 letras para exibir os itens do catálogo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if can_request_new_item %}
+    <section id="newItemTab" class="tab-content {% if not can_request_catalog %}active{% endif %}">
+        <div class="single-form-layout">
+            <div class="form-card">
+                <div class="catalog-results-header">
+                    <h3>Nova solicitação com foto</h3>
+                    <p class="muted">Use esta opção para pedir um material que ainda não está cadastrado no catálogo.</p>
+                </div>
+                <form method="POST" action="{{ url_for('solicitar_item_novo') }}" enctype="multipart/form-data" class="form-grid compact-form">
+                    <div class="full">
+                        <label>Nome do item</label>
+                        <input type="text" name="item_nome_novo" placeholder="Ex.: mancal, rolamento, luva especial..." required>
+                    </div>
+                    <div class="full">
+                        <label>Nome técnico do material</label>
+                        <input type="text" name="nome_tecnico_novo" placeholder="Informe o nome o mais técnico possível" required>
+                    </div>
+                    <div>
+                        <label>Quantidade</label>
+                        <input type="number" min="1" name="quantidade_novo" required>
+                    </div>
+                    <div>
+                        <label>Prioridade</label>
+                        <select name="prioridade_novo" required>
+                            <option value="Normal">Normal</option>
+                            <option value="Urgente">Urgente</option>
+                            <option value="Programada">Programada</option>
+                        </select>
+                    </div>
+                    <div class="full">
+                        <label>Onde será usado</label>
+                        <textarea name="onde_sera_usado_novo" rows="3" required placeholder="Ex.: manutenção, produção, linha específica, equipamento..."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Descrição complementar</label>
+                        <textarea name="observacao_novo" rows="3" placeholder="Marca desejada, medida, aplicação, urgência ou outras observações."></textarea>
+                    </div>
+                    <div class="full">
+                        <label>Foto do item</label>
+                        <input type="file" name="foto_item_novo" accept="image/*" capture="environment">
+                        <small class="field-hint">Você pode tirar a foto na hora ou escolher da galeria.</small>
+                    </div>
+                    <div class="full">
+                        <button class="primary-btn" type="submit">Enviar nova solicitação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section id="historyTab" class="tab-content {% if not can_request_catalog and not can_request_new_item %}active{% endif %}">
+        <section class="panel">
+            <div class="section-header compact">
+                <div>
+                    <h3>Solicitações e análises</h3>
+                    <p class="muted">{% if can_access_management %}Acompanhe aqui o andamento das solicitações do seu setor.{% else %}Acompanhe aqui o andamento das suas solicitações.{% endif %}</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Item</th>
+                            <th>Nome técnico</th>
+                            <th>Qtd</th>
+                            <th>Prioridade</th>
+                            <th>Status</th>
+                            <th>Atualização</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in requester_requests %}
+                        <tr>
+                            <td>#{{ r.id }}</td>
+                            <td>{{ 'Catálogo' if r.tipo == 'CATALOGO' else 'Novo item' }}</td>
+                            <td>{{ r.item_nome }}</td>
+                            <td>{{ r.nome_tecnico or '-' }}</td>
+                            <td>{{ r.quantidade or '-' }}</td>
+                            <td>{{ r.prioridade }}</td>
+                            <td><span class="status-pill {{ request_status_css(r.status) }}">{{ request_status_label(r.status) }}</span></td>
+                            <td>{{ r.data_atualizacao }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8">Você ainda não possui solicitações cadastradas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+</section>
+{% endblock %}
